@@ -1,7 +1,8 @@
-from lib.gui.gui import gui
-from lib.common.setup_env import saves_path
-from lib.common.setup_env import application_path
 from lib.common.setup_env import path
+from lib.common.setup_env import saves_path
+from lib.gui.gui import gui
+
+grabby = False
 
 if path.exists(saves_path):
     disable_load_game = False
@@ -15,13 +16,15 @@ button_frame = [
     ]
 
 frame = [
-    [gui.Text('Welcome to Monopolpy Companion!', justification='center')],
-    [gui.Frame('What would you like to do', button_frame)],
-    [gui.Button('Exit')]
+    [gui.Text('Welcome to Monopolpy Companion!', justification='center', background_color='#C70000')],
+    [gui.Frame('What would you like to do', button_frame, background_color='#99FFFFFF', title_color='#000000')],
+    [gui.Button('Exit', key='exit_button_main_application')]
     ]
 
 main_layout = [
-    [gui.Frame('', frame)]
+    [gui.Frame('', frame, size=(200, 200), background_color=('#408FBC72'))]
     ]
 
-app_window = gui.Window('Monopolpy Companion', main_layout, default_element_size=(600, 500))
+app_window = gui.Window('Monopolpy Companion', main_layout, size=(600, 600),
+                        background_image='monopolpy.png',
+                        grab_anywhere=grabby)

@@ -1,6 +1,6 @@
 import lib.common.setup_env as env
-from lib.gui.gui import gui
 import lib.common.utilities.db_man as database
+from lib.gui.gui import gui
 
 path = env.path
 app_path = env.application_path # Might need to remove
@@ -30,9 +30,10 @@ opts_main_frame = [
     ]
 
 opts_main_layout = [
-    [gui.Frame('Monopolpy Companion Options:', opts_main_frame)],
+    [gui.Frame('Monopolpy Companion Options:', opts_main_frame, background_color='#40bfdbae', title_color='#ff000000',
+               title_location='TITLE_LOCATION_TOP', relief='RELIEF_SUNKEN')],
     [gui.Button('OK')]
 
     ]
 
-window = gui.Window('Monopolpy Companion Options', opts_main_layout)
+window = gui.Window('Monopolpy Companion Options', opts_main_layout, background_image='thing.png', size=(400, 300))
