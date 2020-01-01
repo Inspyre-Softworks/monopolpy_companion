@@ -37,3 +37,5 @@ opts_main_layout = [
     ]
 
 window = gui.Window('Monopolpy Companion Options', opts_main_layout, background_image='thing.png', size=(400, 300))
+
+active = False

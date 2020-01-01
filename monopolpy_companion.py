@@ -1,5 +1,7 @@
 import argparse
 
+import lib.gui.run as app
+
 parser = argparse.ArgumentParser(description='Start the Monopolpy Companion program', prog='monopolpy_companion')
 gui_help = 'Start the program in graphical user interface mode, using PySimpleGUIQt (a port of tkinter).'
 
@@ -11,8 +13,6 @@ args = parser.parse_args()
 print(args)
 
 if args.gui:
-    print(gui)
-
-import lib.gui.run as app
+    print(args.gui)
 
 app.run()

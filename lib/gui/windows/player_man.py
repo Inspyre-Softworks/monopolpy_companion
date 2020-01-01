@@ -17,4 +17,6 @@ layout = [
 
     ]
 
-window = gui.Window('Player Manager', layout, size=(400,400))
+window = gui.Window('Player Manager', layout, size=(400, 400))
+
+active = False

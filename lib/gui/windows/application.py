@@ -25,6 +25,8 @@ main_layout = [
     [gui.Frame('', frame, size=(200, 200), background_color=('#408FBC72'))]
     ]
 
-app_window = gui.Window('Monopolpy Companion', main_layout, size=(600, 600),
-                        background_image='monopolpy.png',
-                        grab_anywhere=grabby)
+window = gui.Window('Monopolpy Companion', main_layout, size=(600, 600),
+                    background_image='monopolpy.png',
+                    grab_anywhere=grabby)
+
+active = False
