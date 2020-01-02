@@ -7,7 +7,7 @@ def run():
         event, vals = win.app_win.Read(timeout=100)
         if event is None or event == 'exit_button_main_application':
             print('user exited')
-            app_win.Close()
+            win.app_win.Close()
             exit()
 
         if not win.opts_win_active and event == 'options_main_button':
