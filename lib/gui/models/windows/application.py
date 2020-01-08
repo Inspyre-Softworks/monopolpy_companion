@@ -44,3 +44,9 @@ window = gui.Window('Monopolpy Companion', main_layout, size=(600, 600),
                     grab_anywhere=grabby)
 
 active = False
+
+#
+# menu_def = ['My Menu Def',
+# ['&Restore', '&Open', '---', '&Message', '&Save', ['1', '2', ['a', 'b']], '&Properties', 'E&xit']]
+# tray = gui.SystemTray(menu=menu_def, data_base64=default)
+# tray.Read()
