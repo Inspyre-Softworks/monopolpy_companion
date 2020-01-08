@@ -1,7 +1,9 @@
-from lib.gui.gui import gui
+""" Define information for the 'Player Management' window """
+
+from lib.gui import qt as gui
 
 frame1 = [
-    [gui.Button('Add Player', key='player_man_add_button'),
+    [gui.Button('Add Player', key='pm_add_button'),
      gui.Button('Remove Player', key='player_man_rem_button'),
      gui.Button('List Players', key='player_man_list_button')
      ],
@@ -17,6 +19,7 @@ layout = [
 
     ]
 
-window = gui.Window('Player Manager', layout, size=(400, 400))
+window = gui.Window('Player Manager', layout, size=(400, 400), background_color='#40bfdbae',
+                    background_image='monopoly_man.png')
 
 active = False

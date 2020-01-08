@@ -1,9 +1,11 @@
+""" Define information for the 'Options' window """
+
 import lib.common.setup_env as env
 import lib.common.utilities.db_man as database
-from lib.gui.gui import gui
+from lib.gui import qt as gui
 
 path = env.path
-app_path = env.application_path # Might need to remove
+app_path = env.application_path  # Might need to remove
 db_path = env.db_path
 
 if database.check_for(db_path):
@@ -32,7 +34,7 @@ opts_main_frame = [
 opts_main_layout = [
     [gui.Frame('Monopolpy Companion Options:', opts_main_frame, background_color='#40bfdbae', title_color='#ff000000',
                title_location='TITLE_LOCATION_TOP', relief='RELIEF_SUNKEN')],
-    [gui.Button('OK')]
+    [gui.Button('OK', key='opts_ok')]
 
     ]
 
