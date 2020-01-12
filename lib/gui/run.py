@@ -32,6 +32,7 @@ log = logging.getLogger('MonopolpyCompanion')
 log.debug('Logger set up, and is set to log debug messages')
 
 opts_win_active = False
+load_game_active = False
 opts_win_exist = False
 
 
@@ -72,11 +73,12 @@ def run():
                 log.debug('User entered player management window')
 
         if pm_win_active:
-            pm_event, pm_val = pm_win.read(timeout=0)
+            pm_event, pm_val = pm_win.read(timeout=100)
+            pm_win.reappear()
             if pm_event is None or pm_event == 'player_man_ok_button':
                 log.debug('User exited the Player Management window')
                 pm_win_active = False
-                pm_win.close()
+                pm_win.disappear()
 
             if pm_event == 'pm_add_button':
                 log.debug('User pressed \'add new\' button')
@@ -93,6 +95,11 @@ def run():
             except NotYetImplementedError as error:
                 log.warning(error)
                 alerts.not_yet_implemented()
+
+        if not load_game_active and event == 'load_saved_main_button':
+            log.debug('User pressed \'Load Game\'')
+            log.warning('Load Game is not yet implemented')
+            alerts.not_yet_implemented()
 
     app_win.close()
 
