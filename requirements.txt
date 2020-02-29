@@ -1,4 +1,4 @@
 PySimpleGUI
 colorlog
-pyyaml
+pyyaml==5.3
 PySimpleGUIQt
