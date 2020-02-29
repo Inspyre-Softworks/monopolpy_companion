@@ -1,0 +1,3 @@
+gui_settings:
+  grab_anywhere: false
+player_database: ~/Documents/Games/Monopolpy_Companion/databases/players.yml

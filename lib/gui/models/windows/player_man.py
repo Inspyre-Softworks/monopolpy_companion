@@ -1,25 +1,51 @@
-""" Define information for the 'Player Management' window """
+class PlayerManagerWindow:
+    """ Define information for the 'Player Management' window """
 
-from lib.gui import qt as gui
+    def __init__(self):
+        from lib.gui import qt as gui
+        from lib.helpers.popup_man import nyi
+        import logging
 
-frame1 = [
-    [gui.Button('Add Player', key='pm_add_button'),
-     gui.Button('Remove Player', key='player_man_rem_button'),
-     gui.Button('List Players', key='player_man_list_button')
-     ],
-    ]
+        log = logging.getLogger('MonopolPyCompanion.GUI.PlayerManagement')
 
-frame2 = [
-    [gui.Button('OK', key='player_man_ok_button')]
-    ]
+        frame1 = [
+            [gui.Button('Add Player', key='pm_add_button'),
+             gui.Button('Remove Player', key='pm_rem_button'),
+             gui.Button('List Players', key='pm_list_button')
+             ],
+            ]
 
-layout = [
-    [gui.Frame('Manager Players', frame1)],
-    [gui.Frame('', frame2)]
+        frame2 = [
+            [gui.Button('OK', key='player_man_ok_button')]
+            ]
 
-    ]
+        layout = [
+            [gui.Frame('Manager Players', frame1)],
+            [gui.Frame('', frame2)]
 
-window = gui.Window('Player Manager', layout, size=(400, 400), background_color='#40bfdbae',
-                    background_image='monopoly_man.png')
+            ]
 
-active = False
+        self.window = gui.Window('Player Manager', layout, size=(400, 400), background_color='#40bfdbae',
+                                 background_image='monopoly_man.png')
+
+        from lib.common.run import pm_active
+
+        self.active = pm_active
+        self.active = True
+
+        unimplemented_buttons = [
+            'pm_add_button',
+            'pm_rem_button',
+            'pm_list_button'
+            ]
+
+        while self.active:
+            event, values = self.window.read(timeout=100)
+
+            if event is None or event == 'player_man_ok_button':
+                self.active = False
+                self.window.close()
+
+            if event in unimplemented_buttons:
+                log.warning('This button leads to a feature that does not yet exist!')
+                nyi(event)

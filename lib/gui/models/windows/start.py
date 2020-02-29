@@ -4,9 +4,13 @@
 
 from ..popups import alerts
 
+import PySimpleGUIQt as qt
 
-def window():
-    pass
+frame1 = [
+    [qt.Listbox('')]
+]
+
+window = qt.Window('')
 
 
 active = False
