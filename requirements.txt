@@ -1,2 +1,2 @@
 pyyaml==5.3
-PySimpleGUIQt
+PySimpleGUIQt==0.28.0
