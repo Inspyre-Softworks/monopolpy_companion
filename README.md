@@ -1,3 +1,7 @@
+[![Updates](https://pyup.io/repos/github/Inspyre-Softworks/monopolpy_companion/shield.svg)](https://pyup.io/repos/github/Inspyre-Softworks/monopolpy_companion/) [![Python 3](https://pyup.io/repos/github/Inspyre-Softworks/monopolpy_companion/python-3-shield.svg)](https://pyup.io/repos/github/Inspyre-Softworks/monopolpy_companion/)
+
+
+
 The MonopolPy Companion App aims to provide useful utilities that will help you get more out of the awesome game of Monopoly.
 
 * peace of mind:
