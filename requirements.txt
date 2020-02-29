@@ -1,4 +1,4 @@
 PySimpleGUI
 colorlog
 pyyaml
-PySimpleGUIQt
+PySimpleGUIQt==0.31.0
