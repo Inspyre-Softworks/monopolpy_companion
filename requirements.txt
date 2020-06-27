@@ -2,4 +2,4 @@
 PySimpleGUIQt==0.31.0
 pyyaml==5.3
 colorlog==4.1.0
-PySimpleGUI==4.16.0
+PySimpleGUI==4.21.0
