@@ -1,6 +1,6 @@
 import argparse
 
-from lib.helpers import logger
+from monopolpy_companion.lib.helpers import logger
 
 # Name the module and set up logging for the program
 name = 'MonopolPyCompanion'
@@ -35,7 +35,7 @@ args = parser.parse_args()
 print(args)
 
 if args.gui:
-    import lib.gui.run as app
+    import monopolpy_companion.lib.gui.run as app
     app.run()
 else:
     print('You didn\'t specify that you wanted the GUI active.')
