@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "monopolpy_companion"
-version = "1.0.dev3"
+version = "1.0.0-alpha.1"
 description = ""
 authors = ["Taylor B. <43686206+tayjaybabee@users.noreply.github.com>"]
 
@@ -11,8 +11,15 @@ PySimpleGUIQt = "^0.35.0"
 inspy-logger = "2.1a14"
 PyYAML = "^6.0"
 PySimpleGUI = "^4.60.3"
+pytk = "^0.0.2"
+tk = "^0.1.0"
 
 [tool.poetry.dev-dependencies]
+Sphinx = "^5.1.1"
+
+
+[tool.poetry.scripts]
+monopolpy-companion = "monopolpy_companion.lib.gui.run:run"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

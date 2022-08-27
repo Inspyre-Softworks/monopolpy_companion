@@ -1,3 +1,5 @@
+#  Copyright (c) 2022. Inspyre-Softworks (https://softworks.inspyre.tech)
+
 import argparse
 
 from monopolpy_companion.lib.helpers import logger

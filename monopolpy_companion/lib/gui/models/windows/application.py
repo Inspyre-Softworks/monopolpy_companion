@@ -1,12 +1,14 @@
 """ Define information for the applications 'main' landing window """
 
+#  Copyright (c) 2022. Inspyre-Softworks (https://softworks.inspyre.tech)
+
+import logging
+
 # Import Config
 from monopolpy_companion.lib.common.settings import Config
-import logging
 
 name = 'MonopolPyCompanion.GUI.ApplicationWindow'
 log = logging.getLogger(name)
-
 
 # Load Config
 config = Config()
@@ -64,7 +66,6 @@ def window():
     global conf, log
     from monopolpy_companion.lib.common.run import opts_win_active
     from monopolpy_companion.lib.helpers.popup_man import nyi
-    from monopolpy_companion.lib.
 
     while True:
         event, values = win.read(timeout=100)

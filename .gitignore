@@ -11,3 +11,4 @@ pyvenv.cfg
 /lib64
 /include
 /dist
+/.python-version

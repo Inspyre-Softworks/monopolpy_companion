@@ -5,12 +5,18 @@ nyi_active = False
 pm_active = False
 
 
+def get_obj_id_hex(obj):
+    """
+    Get the object id as a hex string.
+    """
+    return hex(obj)
+
+
+#  Copyright (c) 2022. Inspyre-Softworks (https://softworks.inspyre.tech)
+
 class Warden(object):
     def __init__(self):
         pass
-
-
-
 
 
 class WindowWarden(Warden):
@@ -28,6 +34,14 @@ class WindowWarden(Warden):
     def register(self, name, register_as_active=False):
         self.__windows[name] = self.Window(name, register_as_active)
         return self.__windows[name]
+
+    @property
+    def number_registered(self):
+        return len(self.__windows)
+
+    @property
+    def number_active(self):
+        return sum(bool(self.windows[window].active) for window in self.windows)
 
     class Window(object):
         def __init__(self, name, window_object, register_as_active=False):
@@ -66,18 +80,30 @@ class WindowWarden(Warden):
             return self.__window
 
         def __repr__(self):
-            statement = f"WindowWarden.Window:{self.name} ({id(self)} | Active: {self.active} ({id(self.active)}) | " \
-                        f"Window Object: {self.window} ({id(self.window)})"
-            return statement
-
+            return f"WindowWarden.Window:{self.name} ({id(self)}) | Active: {self.active} |" \
+                   f" Window Object: {self.window} ({id(self.window)})"
 
         def toggle_active(self):
-            pass
+            """
+            Toggles the 'active' flag for the window.
+
+            :func:`WindowWarden.Window.toggle_active` changes the current :class:`bool` value of the 'active' flag to
+            it's opposite,
+
+            Returns:
+                :class:`bool`:
+                    A boolean indicating whether the window's 'active' flag is set.
+            """
+            self.__active = not self.__active
+            return self.active
 
 
 class PopUpWarden(object):
     def __init__(self):
         self.__popups = {}
+
+    def __gather(self):
+        pass
 
     @property
     def popups(self):
@@ -100,11 +126,20 @@ class PopUpWarden(object):
 
         return acc
 
-    def register(self, name):
-        self.__popups[name] = self.PopUp(name)
+    def register(self, name, callback, register_as_active=False):
+        if not isinstance(name, str):
+            raise TypeError(f"Parameter 'name' must be of type 'str' not {type(name)}!")
+        if not callable(callback):
+            raise TypeError(f"Parameter 'callback' must be of type 'callable' not {type(callback)}!")
+
+        if register_as_active and not isinstance(register_as_active, bool):
+            raise TypeError(f"Parameter 'register_as_active' must be of type 'bool' not {type(register_as_active)}!")
+
+        if name not in self.__popups.keys():
+            self.__popups[name] = self.PopUp(name, callback, register_as_active)
 
     class PopUp(object):
-        def __init__(self, name, register_as_active=False):
+        def __init__(self, name, callback, register_as_active=False):
             self.__name = name
 
             if not isinstance(register_as_active, bool):
