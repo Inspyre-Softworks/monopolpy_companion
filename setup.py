@@ -1,3 +1,5 @@
+#  Copyright (c) 2022. Inspyre-Softworks (https://softworks.inspyre.tech)
+
 import setuptools
 
 with open("README.md", "r") as fh:
@@ -5,11 +7,11 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
 
-    name='monopolpy_companion.py.py',
+    name='app.py.py',
 
     version='1.3',
 
-    scripts=['monopolpy_companion.py'],
+    scripts=['app.py'],
 
     author="Taylor-Jayde Blackstone",
 

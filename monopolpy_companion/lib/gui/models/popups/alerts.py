@@ -1,5 +1,7 @@
 """ Not Yet Implemented error popup """
 
+#  Copyright (c) 2022. Inspyre-Softworks (https://softworks.inspyre.tech)
+
 import PySimpleGUI as gui
 
 oh_no = b'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkEAYAAAAgckkXAAAcf3pUWHRSYXcgcHJvZmlsZSB0eXBlIGV4aWYAAHjarZtpUh49sKX' \
@@ -13,5 +15,5 @@ oh_no = b'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkEAYAAAAgckkXAAAcf3pUWHRSYXcgcHJvZmlsZS
 
 
 def not_yet_implemented(msg=''):
-    return gui.PopupOK('This feature has yet to be implemented\n' + msg, background_color='#8fbc72', icon=oh_no,
-                       title='Error: Not yet implemented',)
+    return gui.PopupError('This feature has yet to be implemented\n' + msg, background_color='#8fbc72', icon=oh_no,
+                          title='Error: Not yet implemented')
