@@ -24,8 +24,7 @@ import logging
 
 from monopolpy_companion.lib.common.settings import Config
 
-conf = Config()
-conf = conf.data()
+conf = Config().data
 
 
 def run(cli_args=None, player_db_file=None):

@@ -9,9 +9,7 @@ log = logging.getLogger(name)
 
 
 # Load Config
-config = Config()
-config = config.data()
-print(config)
+conf = Config().data
 
 # Load bytecode for icon
 from monopolpy_companion.lib.gui.models.images.icons.main_default import icon as app_icon
@@ -21,8 +19,6 @@ from monopolpy_companion.lib.gui.models.images.buttons.app_win import start_new_
 from monopolpy_companion.lib.gui.models.images.buttons.app_win import load_saved_button_img
 
 import PySimpleGUIQt as gui
-
-conf = config
 
 gui.ChangeLookAndFeel('DarkGreen1')
 

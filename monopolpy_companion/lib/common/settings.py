@@ -1,50 +1,52 @@
-class Config:
-    import logging
-    import inspect
+import logging
+import os
+import yaml
 
-    FRAME_FILENAME = 1
-    print("Imported from: ", inspect.getouterframes(inspect.currentframe())[-1][FRAME_FILENAME])
+
+logger = logging.getLogger('MonopolpyCompanion.' + __name__)
+
+
+class Config:
+    """Configuration handler for the application."""
+
+    def __init__(self, file=None):
+        logger.info(f'Logger started for {logger.name}')
+        self.data = self.load(file)
 
     def load(self, file=None):
-        import logging
-        import os
-        import yaml
+        """Load configuration data from *file*.
 
-        name = 'MonopolpyCompanion.' + str(__name__)
-        log = logging.getLogger(name)
-        log.info(f'Logger started for {name}')
-
+        Falls back to the default configuration file when *file* is ``None``.
+        Missing keys are handled gracefully with defaults and warnings logged
+        instead of printing to stdout.
+        """
         if file is None:
-            log.debug('A custom config file was not provided!')
+            logger.debug('A custom config file was not provided!')
             file = os.getcwd() + '/conf/default.yml'
 
         with open(file) as res:
-            loaded = yaml.load(res, Loader=yaml.SafeLoader)
-            data = loaded
+            data = yaml.safe_load(res)
 
-        if data['gui_settings']['grab_anywhere'] is None:
-            print('found a problem')
-            data['gui_settings']['grab_anywhere'] = False
+        gui_settings = data.setdefault('gui_settings', {})
+        if gui_settings.get('grab_anywhere') is None:
+            logger.warning("Missing 'grab_anywhere' in gui_settings; defaulting to False")
+            gui_settings['grab_anywhere'] = False
 
         return data
 
-    def __init__(self, file=None):
-        import yaml
-        print(self.__class__)
-        self.data = self.load
-
     def write(self, file=None):
-        import yaml
+        """Write configuration data to *file*.
 
+        If *file* is ``None``, the default configuration path is used.
+        """
         if file is None:
-            import os
-            print('file not found')
+            logger.warning('Output file not provided; using default file')
             file = os.getcwd() + '/conf/default.yml'
 
         with open(file, 'w') as outfile:
-            yaml.dump(self.data, outfile, default_flow_style=False)
+            yaml.safe_dump(self.data, outfile, default_flow_style=False)
 
 
 if __name__ == '__main__':
-    print('That\'s not how you use this')
+    print("That's not how you use this")
     exit()
