@@ -1,16 +1,16 @@
 
 
-""" Define information for the 'Start New Game' window """
+"""Define information for the 'Start New Game' window"""
 
 from ..popups import alerts
 
-import PySimpleGUIQt as qt
+import PySimpleGUI as gui
 
 frame1 = [
-    [qt.Listbox('')]
+    [gui.Listbox('')]
 ]
 
-window = qt.Window('')
+window = gui.Window('')
 
 
 active = False

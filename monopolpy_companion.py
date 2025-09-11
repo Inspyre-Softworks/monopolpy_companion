@@ -15,7 +15,7 @@ conffile_help = 'Specify (using the absolute path) where the config file that yo
 parser.add_argument('--conf-file', action="store", dest='conf_file')
 
 # Introduce the help printer and argument for the --gui flag
-gui_help = 'Start the program in graphical user interface mode, using PySimpleGUIQt (a port of tkinter).'
+gui_help = 'Start the program in graphical user interface mode, using PySimpleGUI (pysimplegui-4-foss).'
 parser.add_argument('--gui', dest='gui', help=gui_help, required=False, default=None, action='store_true')
 
 # Introduce the --dev-mode argument

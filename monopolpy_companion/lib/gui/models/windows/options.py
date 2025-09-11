@@ -15,7 +15,7 @@ class OptionsWindow:
 
     def __init__(self, config):
         from monopolpy_companion.lib.common.run import opts_win_active
-        import PySimpleGUIQt as qt
+        import PySimpleGUI as gui
         # First we pull in the environment variables
         from monopolpy_companion.conf import conf as defaults
         import logging
@@ -34,29 +34,29 @@ class OptionsWindow:
         self.conf = conf
 
         self.opts_playman_frame = [
-            [qt.Button('Player Management', key='opts_playman_button')],
+            [gui.Button('Player Management', key='opts_playman_button')],
             ]
 
         self.opts_frame = [
-            [qt.Checkbox('Grab anywhere', default=self.is_grabby(), key='grab_anywhere_box')]
+            [gui.Checkbox('Grab anywhere', default=self.is_grabby(), key='grab_anywhere_box')]
             ]
 
         self.opts_main_frame = [
-            [qt.Frame('Player Management:', self.opts_playman_frame)],
-            [qt.Frame('GUI Options', self.opts_frame)]
+            [gui.Frame('Player Management:', self.opts_playman_frame)],
+            [gui.Frame('GUI Options', self.opts_frame)]
 
             ]
 
         self.layout = [
-            [qt.Frame('Monopolpy Companion Options:', self.opts_main_frame, background_color='#40bfdbae',
-                      title_color='#ff000000', title_location='TITLE_LOCATION_TOP',
-                      relief='RELIEF_SUNKEN')],
-            [qt.Button('OK', key='opts_ok'), qt.Cancel(key='opts_cancel'), qt.Button('Apply', key='opts_apply')]
+            [gui.Frame('Monopolpy Companion Options:', self.opts_main_frame, background_color='#40bfdbae',
+                       title_color='#ff000000', title_location='TITLE_LOCATION_TOP',
+                       relief='RELIEF_SUNKEN')],
+            [gui.Button('OK', key='opts_ok'), gui.Cancel(key='opts_cancel'), gui.Button('Apply', key='opts_apply')]
             ]
 
-        self.opts_win = qt.Window('Monopolpy Companion Options', self.layout, grab_anywhere=self.conf['gui_settings'][
+        self.opts_win = gui.Window('Monopolpy Companion Options', self.layout, grab_anywhere=self.conf['gui_settings'][
             'grab_anywhere'],
-                                  background_image='thing.png', size=(400, 200))
+                                   background_image='thing.png', size=(400, 200))
         from monopolpy_companion.lib.common.run import pm_active
 
         log.debug(f'Imported active state of the Player Manager window which is: {pm_active}')

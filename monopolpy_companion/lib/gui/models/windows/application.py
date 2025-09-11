@@ -18,7 +18,7 @@ from monopolpy_companion.lib.gui.models.images.icons.main_default import icon as
 from monopolpy_companion.lib.gui.models.images.buttons.app_win import start_new_button_img
 from monopolpy_companion.lib.gui.models.images.buttons.app_win import load_saved_button_img
 
-import PySimpleGUIQt as gui
+import PySimpleGUI as gui
 
 gui.ChangeLookAndFeel('DarkGreen1')
 

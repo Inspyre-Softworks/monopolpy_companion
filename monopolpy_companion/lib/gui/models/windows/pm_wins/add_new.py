@@ -1,14 +1,14 @@
-""" Define information for the Add New Player window """
+"""Define information for the Add New Player window"""
 
-import PySimpleGUIQt as qt
+import PySimpleGUI as gui
 
 from ..start import alerts
 
 frame1 = [
-    [qt.Text('Name:', font="Monopoly, Bold", text_color='#C70000'), qt.InputText(key='user_name')],
-    [qt.Text('Gender:', font="Monopoly, Bold", text_color='#C70000'), qt.Radio('Male', group_id='gender',
-                                                                               key='gender_radio_male'),
-     qt.Radio('Female', group_id='gender', key='gender_radio_female')]
+    [gui.Text('Name:', font="Monopoly, Bold", text_color='#C70000'), gui.InputText(key='user_name')],
+    [gui.Text('Gender:', font="Monopoly, Bold", text_color='#C70000'), gui.Radio('Male', group_id='gender',
+                                                                                key='gender_radio_male'),
+     gui.Radio('Female', group_id='gender', key='gender_radio_female')]
     ]
 
 

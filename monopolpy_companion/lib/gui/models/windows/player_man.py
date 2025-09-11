@@ -2,7 +2,7 @@ class PlayerManagerWindow:
     """ Define information for the 'Player Management' window """
 
     def __init__(self):
-        from monopolpy_companion.lib.gui import qt as gui
+        from monopolpy_companion.lib.gui import gui
         from monopolpy_companion.lib.helpers.popup_man import nyi
         import logging
 

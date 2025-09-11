@@ -1,3 +1,3 @@
-""" Initialize PySimpleGUIQt as qt """
+"""Initialize PySimpleGUI as gui"""
 
-import PySimpleGUIQt as qt
+import PySimpleGUI as gui
