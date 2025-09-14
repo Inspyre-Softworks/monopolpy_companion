@@ -1,5 +1,5 @@
 import logging
-import os
+from pathlib import Path
 import yaml
 
 
@@ -22,7 +22,7 @@ class Config:
         """
         if file is None:
             logger.debug('A custom config file was not provided!')
-            file = os.getcwd() + '/conf/default.yml'
+            file = Path(__file__).resolve().parents[2] / 'conf' / 'default.yml'
 
         with open(file) as res:
             data = yaml.safe_load(res)
@@ -41,7 +41,7 @@ class Config:
         """
         if file is None:
             logger.warning('Output file not provided; using default file')
-            file = os.getcwd() + '/conf/default.yml'
+            file = Path(__file__).resolve().parents[2] / 'conf' / 'default.yml'
 
         with open(file, 'w') as outfile:
             yaml.safe_dump(self.data, outfile, default_flow_style=False)
