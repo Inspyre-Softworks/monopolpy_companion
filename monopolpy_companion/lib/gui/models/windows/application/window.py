@@ -121,19 +121,22 @@ colors, fonts, etc.
 
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
         col_widget = self._content_column.Widget
-        # Detach from any prior geometry manager and embed into the canvas
+        frame_widget = col_widget.master
+        # Detach from pack and overlay the column's frame above the canvas
         try:
-            col_widget.pack_forget()
+            frame_widget.pack_forget()
         except Exception:
             pass
-        col_widget.place(in_=self.canvas, x=cw // 2, y=ch // 2, anchor=tk.CENTER)
-        self._content_container = col_widget
+        fx = self.canvas.winfo_x() + cw // 2
+        fy = self.canvas.winfo_y() + ch // 2
+        frame_widget.place(in_=self.window.TKroot, x=fx, y=fy, anchor=tk.CENTER)
+        self._content_container = frame_widget
 
         def _on_resize(event):
             try:
-                self._content_container.place_configure(
-                    x=event.width // 2, y=event.height // 2
-                )
+                fx = self.canvas.winfo_x() + event.width // 2
+                fy = self.canvas.winfo_y() + event.height // 2
+                self._content_container.place_configure(x=fx, y=fy)
             except Exception:
                 pass
             if self.enable_bg_autoscale:
