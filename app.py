@@ -30,15 +30,20 @@ log.debug(f'Setting up runtime variables for the {name} module')
 
 
 
+def main():
+    global args
+    args = parser.parse_args()
+    print(args)
 
-args = parser.parse_args()
-print(args)
+    if args.gui:
+        import monopolpy_companion.lib.gui.run as app
+        app.run()
+    else:
+        print('You didn\'t specify that you wanted the GUI active.')
 
-if args.gui:
-    import monopolpy_companion.lib.gui.run as app
-    app.run()
-else:
-    print('You didn\'t specify that you wanted the GUI active.')
+    if args.conf_file:
+        print('found it')
 
-if args.conf_file:
-    print('found it')
+
+if __name__ == '__main__':
+    main()
