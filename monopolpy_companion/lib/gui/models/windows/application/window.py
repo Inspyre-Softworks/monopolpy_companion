@@ -129,7 +129,10 @@ colors, fonts, etc.
             pass
         fx = self.canvas.winfo_x() + cw // 2
         fy = self.canvas.winfo_y() + ch // 2
+        # Overlay the column's Frame on top of the canvas and make it visible
         frame_widget.place(in_=self.window.TKroot, x=fx, y=fy, anchor=tk.CENTER)
+        frame_widget.tkraise()
+        self._content_column.update(visible=True)
         self._content_container = frame_widget
 
         def _on_resize(event):
