@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import yaml
 
@@ -19,6 +19,31 @@ class Config:
         self._path: Optional[Path] = None
         self.data = self.load(file)
 
+    def _resolve_load_paths(self, file: Optional[Path]) -> Tuple[Path, Path]:
+        """Return the source and target paths for a load request."""
+
+        if file is not None:
+            load_path = Path(file)
+            return load_path, load_path
+
+        if self._user_file.exists():
+            return self._user_file, self._user_file
+
+        logger.debug('A custom config file was not provided!')
+        return self._default_file, self._user_file
+
+    def _resolve_write_target(self, file: Optional[Path]) -> Path:
+        """Return the path to which configuration writes should be sent."""
+
+        if file is not None:
+            return Path(file)
+
+        if self._path is None:
+            logger.warning('Output file not provided; using default user file')
+            self._path = self._user_file
+
+        return self._path
+
     @property
     def path(self) -> Optional[Path]:
         """Return the path that configuration writes will target."""
@@ -36,17 +61,7 @@ class Config:
         instead of printing to stdout.
         """
 
-        if file is not None:
-            load_path = Path(file)
-            target_path = load_path
-        else:
-            if self._user_file.exists():
-                load_path = self._user_file
-                target_path = self._user_file
-            else:
-                logger.debug('A custom config file was not provided!')
-                load_path = self._default_file
-                target_path = self._user_file
+        load_path, target_path = self._resolve_load_paths(file)
 
         logger.debug('Loading configuration from %s', load_path)
         with open(load_path) as res:
@@ -68,13 +83,7 @@ class Config:
         used.
         """
 
-        if file is not None:
-            target = Path(file)
-        else:
-            if self._path is None:
-                logger.warning('Output file not provided; using default user file')
-                self._path = self._user_file
-            target = self._path
+        target = self._resolve_write_target(file)
 
         target.parent.mkdir(parents=True, exist_ok=True)
         logger.debug('Writing configuration to %s', target)

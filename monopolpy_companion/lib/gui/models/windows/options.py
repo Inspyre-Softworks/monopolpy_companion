@@ -1,3 +1,6 @@
+from yaml import YAMLError
+
+
 class OptionsWindow:
     """ Define information for the 'Options' window """
 
@@ -59,13 +62,17 @@ class OptionsWindow:
             [gui.Button('OK', key='opts_ok'), gui.Cancel(key='opts_cancel'), gui.Button('Apply', key='opts_apply')]
             ]
 
-        import inspect
         window_kwargs = {
             'grab_anywhere': self.conf['gui_settings']['grab_anywhere'],
             'size': (400, 200)
         }
-        if 'background_image' in inspect.signature(gui.Window.__init__).parameters:
-            window_kwargs['background_image'] = 'thing.png'
+        version = getattr(gui, '__version__', None)
+        try:
+            major_version = int(str(version).split('.', 1)[0]) if version else None
+        except ValueError:
+            major_version = None
+        if major_version is not None and major_version < 5:
+            window_kwargs['background_image'] = self.conf['gui_settings'].get('background_image', 'thing.png')
         self.opts_win = gui.Window('Monopolpy Companion Options', self.layout, **window_kwargs)
         from monopolpy_companion.lib.common.run import pm_active
 
@@ -75,7 +82,7 @@ class OptionsWindow:
 
             event, values = self.opts_win.read(timeout=100)
 
-            if event == 'opts_ok' or event == 'opts_apply':
+            if event in ('opts_ok', 'opts_apply'):
                 log.debug('User is attempting to save config to file')
                 self.save_config(values)
 
@@ -125,12 +132,12 @@ class OptionsWindow:
         if self._config_obj is not None:
             try:
                 self._config_obj.write()
-                path = getattr(self._config_obj, 'path', None)
-                if path:
+            except (OSError, YAMLError):
+                self.log.exception('Failed to save configuration to disk')
+            else:
+                if path := getattr(self._config_obj, 'path', None):
                     self.log.info('Configuration saved to %s', path)
                 else:
                     self.log.info('Configuration saved')
-            except Exception:
-                self.log.exception('Failed to save configuration to disk')
         else:
             self.log.warning('No Config instance supplied; changes not persisted to disk')
