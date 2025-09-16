@@ -30,7 +30,12 @@ class OptionsWindow:
         log.debug(f'New active state: {opts_win_active}')
         self.active = opts_win_active
 
-        conf = config
+        self._config_obj = None
+        if hasattr(config, 'data') and hasattr(config, 'write'):
+            self._config_obj = config
+            conf = config.data
+        else:
+            conf = config
         self.conf = conf
 
         self.opts_playman_frame = [
@@ -54,9 +59,14 @@ class OptionsWindow:
             [gui.Button('OK', key='opts_ok'), gui.Cancel(key='opts_cancel'), gui.Button('Apply', key='opts_apply')]
             ]
 
-        self.opts_win = gui.Window('Monopolpy Companion Options', self.layout, grab_anywhere=self.conf['gui_settings'][
-            'grab_anywhere'],
-                                   background_image='thing.png', size=(400, 200))
+        import inspect
+        window_kwargs = {
+            'grab_anywhere': self.conf['gui_settings']['grab_anywhere'],
+            'size': (400, 200)
+        }
+        if 'background_image' in inspect.signature(gui.Window.__init__).parameters:
+            window_kwargs['background_image'] = 'thing.png'
+        self.opts_win = gui.Window('Monopolpy Companion Options', self.layout, **window_kwargs)
         from monopolpy_companion.lib.common.run import pm_active
 
         log.debug(f'Imported active state of the Player Manager window which is: {pm_active}')
@@ -67,9 +77,7 @@ class OptionsWindow:
 
             if event == 'opts_ok' or event == 'opts_apply':
                 log.debug('User is attempting to save config to file')
-                from monopolpy_companion.lib.helpers.popup_man import nyi
-
-                nyi('Save Config')
+                self.save_config(values)
 
             if event == 'opts_ok':
                 log.debug('User pressed OK in the options window')
@@ -95,3 +103,34 @@ class OptionsWindow:
                 return self.conf['gui_settings']['grab_anywhere']
             except KeyError:
                 return False
+
+    def save_config(self, values):
+        """Persist the configuration using the active Config instance."""
+
+        if self.conf is None:
+            self.log.error('Configuration not loaded; cannot save')
+            return
+
+        gui_settings = self.conf.setdefault('gui_settings', {})
+        new_grab_anywhere = bool(values.get('grab_anywhere_box'))
+        old_grab_anywhere = gui_settings.get('grab_anywhere')
+        gui_settings['grab_anywhere'] = new_grab_anywhere
+        if old_grab_anywhere != new_grab_anywhere:
+            self.log.debug(
+                "Updated 'grab_anywhere' from %s to %s",
+                old_grab_anywhere,
+                new_grab_anywhere,
+            )
+
+        if self._config_obj is not None:
+            try:
+                self._config_obj.write()
+                path = getattr(self._config_obj, 'path', None)
+                if path:
+                    self.log.info('Configuration saved to %s', path)
+                else:
+                    self.log.info('Configuration saved')
+            except Exception:
+                self.log.exception('Failed to save configuration to disk')
+        else:
+            self.log.warning('No Config instance supplied; changes not persisted to disk')

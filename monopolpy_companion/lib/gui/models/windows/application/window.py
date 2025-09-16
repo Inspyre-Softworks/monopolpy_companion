@@ -60,7 +60,7 @@ colors, fonts, etc.
     _layout_builder: MonopolyMainLayout = field(init=False, repr=False)
     _pil_img: Optional[Image.Image] = field(default=None, init=False, repr=False)
     _photo: Optional[ImageTk.PhotoImage] = field(default=None, init=False, repr=False)
-    _content_container: Optional[int] = field(default=None, init=False, repr=False)
+    _content_container: Optional[tk.Widget] = field(default=None, init=False, repr=False)
     window: Optional[sg.Window] = field(default=None, init=False)
     canvas: Optional[tk.Canvas] = field(default=None, init=False)
 
@@ -78,7 +78,10 @@ colors, fonts, etc.
     def construct(self) -> sg.Window:
         """Build and return the sg.Window with background and content layout."""
         if self.theme:
-            sg.theme(self.theme)
+            if hasattr(sg, "theme"):
+                sg.theme(self.theme)
+            else:
+                sg.set_options(theme=self.theme)
 
         if self.bg_image_path:
             self._pil_img = Image.open(self.bg_image_path).convert('RGBA')
@@ -118,13 +121,25 @@ colors, fonts, etc.
 
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
         col_widget = self._content_column.Widget
-        self._content_container = self.canvas.create_window(
-            cw // 2, ch // 2, window=col_widget, anchor=tk.CENTER
-        )
+        frame_widget = col_widget.master
+        # Detach from pack and overlay the column's frame above the canvas
+        try:
+            frame_widget.pack_forget()
+        except Exception:
+            pass
+        fx = self.canvas.winfo_x() + cw // 2
+        fy = self.canvas.winfo_y() + ch // 2
+        # Overlay the column's Frame on top of the canvas and make it visible
+        frame_widget.place(in_=self.window.TKroot, x=fx, y=fy, anchor=tk.CENTER)
+        frame_widget.tkraise()
+        self._content_column.update(visible=True)
+        self._content_container = frame_widget
 
         def _on_resize(event):
             try:
-                self.canvas.coords(self._content_container, event.width // 2, event.height // 2)
+                fx = self.canvas.winfo_x() + event.width // 2
+                fy = self.canvas.winfo_y() + event.height // 2
+                self._content_container.place_configure(x=fx, y=fy)
             except Exception:
                 pass
             if self.enable_bg_autoscale:

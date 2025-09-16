@@ -11,3 +11,4 @@ pyvenv.cfg
 /lib64
 /include
 /dist
+monopolpy_companion/conf/user.yml

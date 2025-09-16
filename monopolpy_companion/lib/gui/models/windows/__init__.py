@@ -6,7 +6,8 @@ from monopolpy_companion.lib.gui.models.images.icons.main_default import icon as
 from monopolpy_companion.lib.gui.models.images.buttons.app_win import start_new_button_img, load_saved_button_img
 
 
-CONF = Config().data
+CONFIG = Config()
+CONF = CONFIG.data
 
 
 app_win = MainWindow(
@@ -44,7 +45,7 @@ def window():
             from monopolpy_companion.lib.gui.models.windows.options import OptionsWindow
 
             opts_win_active = True
-            OptionsWindow(CONF)
+            OptionsWindow(CONFIG)
             opts_win_active = False
 
         if event == 'start_new_main_button':
