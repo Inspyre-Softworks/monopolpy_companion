@@ -54,9 +54,14 @@ class OptionsWindow:
             [gui.Button('OK', key='opts_ok'), gui.Cancel(key='opts_cancel'), gui.Button('Apply', key='opts_apply')]
             ]
 
-        self.opts_win = gui.Window('Monopolpy Companion Options', self.layout, grab_anywhere=self.conf['gui_settings'][
-            'grab_anywhere'],
-                                   background_image='thing.png', size=(400, 200))
+        import inspect
+        window_kwargs = {
+            'grab_anywhere': self.conf['gui_settings']['grab_anywhere'],
+            'size': (400, 200)
+        }
+        if 'background_image' in inspect.signature(gui.Window.__init__).parameters:
+            window_kwargs['background_image'] = 'thing.png'
+        self.opts_win = gui.Window('Monopolpy Companion Options', self.layout, **window_kwargs)
         from monopolpy_companion.lib.common.run import pm_active
 
         log.debug(f'Imported active state of the Player Manager window which is: {pm_active}')
