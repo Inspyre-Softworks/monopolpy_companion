@@ -28,7 +28,7 @@ conf = Config().data
 
 
 def run(cli_args=None, player_db_file=None):
-    from monopolpy_companion.lib.gui.models.windows import app_win
+    from monopolpy_companion.lib.gui.models.windows import window
     # while True:
     #
     #     event, vals = app_win.read(timeout=100)
@@ -87,7 +87,7 @@ def run(cli_args=None, player_db_file=None):
     #         log.warning('Load Game is not yet implemented')
     #         alerts.not_yet_implemented()
 
-    app_win()
+    window()
 
     exit()
 

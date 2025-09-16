@@ -48,9 +48,9 @@ class OptionsWindow:
             ]
 
         self.layout = [
-            [gui.Frame('Monopolpy Companion Options:', self.opts_main_frame, background_color='#40bfdbae',
-                       title_color='#ff000000', title_location='TITLE_LOCATION_TOP',
-                       relief='RELIEF_SUNKEN')],
+            [gui.Frame('Monopolpy Companion Options:', self.opts_main_frame, background_color='#bfdbae',
+                       title_color='#000000', relief='sunken')
+             ],
             [gui.Button('OK', key='opts_ok'), gui.Cancel(key='opts_cancel'), gui.Button('Apply', key='opts_apply')]
             ]
 

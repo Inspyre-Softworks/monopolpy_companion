@@ -1,5 +1,5 @@
 """ Namespace for all window models """
-
+import PySimpleGUI as sg
 from .application.window import MainWindow
 from monopolpy_companion.lib.common.settings import Config
 from monopolpy_companion.lib.gui.models.images.icons.main_default import icon as app_icon
@@ -14,10 +14,10 @@ app_win = MainWindow(
     icon_data=     app_icon,
     tray_menu=     ['My Menu Def', ['&Restore','&Open','---','&Message','&Save',['1','2',['a','b']],'&Properties','E&xit']],
     bg_image_path= CONF['gui_settings'].get('background_image', 'monopolpy.png'),
-    location=(450, 100),
+    location=      (450, 100),
     grab_anywhere= CONF['gui_settings']['grab_anywhere'],
-    theme='DarkAmber',
-    layout_kwargs=dict(
+    theme=         'DarkAmber',
+    layout_kwargs= dict(
 
         start_new_img=  start_new_button_img,
         load_saved_img= load_saved_button_img
@@ -32,7 +32,6 @@ WIN = app_win.construct()
 def window():
     from monopolpy_companion.lib.common.run import opts_win_active
     from monopolpy_companion.lib.helpers.popup_man import nyi
-
 
     while True:
         event, values = app_win.read(timeout=100)
