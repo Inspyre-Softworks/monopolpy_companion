@@ -92,20 +92,30 @@ def window():
         if event == "save_session_button":
             session = get_current_session()
             if session is None:
-                gui.PopupOK("There is no active session to save.")
+                gui.PopupOK("No active session to save.")
             else:
-                path = save_session(session, session.save_path)
-                gui.PopupOK(f"Session saved to:\n{path}")
-                refresh_summary()
+                try:
+                    save_session(session, session.save_path)
+                except Exception as exc:
+                    log.error("Failed to save session: %s", exc)
+                    gui.PopupOK("Failed to save session.")
+                else:
+                    gui.PopupOK("Session saved.")
+                    refresh_summary()
 
         if event == "advance_turn_button":
             session = get_current_session()
             if session is None:
-                gui.PopupOK("There is no active session yet.")
+                gui.PopupOK("No active session.")
             else:
                 current_player = session.advance_turn()
-                save_session(session, session.save_path)
-                gui.PopupOK(f"It is now {current_player.name}'s turn.")
+                try:
+                    save_session(session, session.save_path)
+                except Exception as exc:
+                    log.error("Autosave failed after advancing turn: %s", exc)
+                    gui.PopupOK("Turn advanced, but autosave failed.")
+                else:
+                    gui.PopupOK(f"It is now {current_player.name}'s turn.")
                 refresh_summary()
 
     win.close()

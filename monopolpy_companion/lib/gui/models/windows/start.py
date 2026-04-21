@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from monopolpy_companion.game.models import create_standard_session
 from monopolpy_companion.game.storage import list_saved_sessions, load_session, save_session
 from monopolpy_companion.lib.gui import gui
+
+log = logging.getLogger(__name__)
 
 
 def start_new_session_dialog():
@@ -53,7 +57,7 @@ def start_new_session_dialog():
 def load_saved_session_dialog():
     sessions = list_saved_sessions()
     if not sessions:
-        gui.PopupOK("No saved sessions were found yet.")
+        gui.PopupOK("No saved sessions found.")
         return None
 
     options = [f"{item.display_name} | {item.path.name}" for item in sessions]
@@ -75,7 +79,12 @@ def load_saved_session_dialog():
                 gui.PopupOK("Select a save first.")
                 continue
             selected_index = options.index(selected[0])
-            selected_session = load_session(sessions[selected_index].path)
+            try:
+                selected_session = load_session(sessions[selected_index].path)
+            except Exception as exc:
+                log.error("Failed to load session: %s", exc)
+                gui.PopupOK("Failed to load session.")
+                break
             break
 
     window.close()
