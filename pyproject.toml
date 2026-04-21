@@ -6,11 +6,9 @@ authors = ["Taylor B. <43686206+tayjaybabee@users.noreply.github.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.11"
-PySide2 = "^5.15.2"
-PySimpleGUIQt = "^0.35.0"
 inspy-logger = "2.1a14"
 PyYAML = "^6.0"
-PySimpleGUI = "^4.60.3"
+"pysimplegui-4-foss" = "^4.60.4.1"
 
 [tool.poetry.dev-dependencies]
 

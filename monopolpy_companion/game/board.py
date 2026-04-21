@@ -1,0 +1,48 @@
+from __future__ import annotations
+
+from .models import Space, SpaceType
+
+
+def build_standard_board() -> list[Space]:
+    return [
+        Space(0, "GO", SpaceType.CORNER, notes="Collect salary when passing."),
+        Space(1, "Mediterranean Avenue", SpaceType.PROPERTY, price=60, color_group="Brown", rent_schedule=(2, 10, 30, 90, 160, 250), house_cost=50, mortgage_value=30),
+        Space(2, "Community Chest", SpaceType.COMMUNITY_CHEST),
+        Space(3, "Baltic Avenue", SpaceType.PROPERTY, price=60, color_group="Brown", rent_schedule=(4, 20, 60, 180, 320, 450), house_cost=50, mortgage_value=30),
+        Space(4, "Income Tax", SpaceType.TAX, notes="Pay $200."),
+        Space(5, "Reading Railroad", SpaceType.RAILROAD, price=200, rent_schedule=(25, 50, 100, 200), mortgage_value=100),
+        Space(6, "Oriental Avenue", SpaceType.PROPERTY, price=100, color_group="Light Blue", rent_schedule=(6, 30, 90, 270, 400, 550), house_cost=50, mortgage_value=50),
+        Space(7, "Chance", SpaceType.CHANCE),
+        Space(8, "Vermont Avenue", SpaceType.PROPERTY, price=100, color_group="Light Blue", rent_schedule=(6, 30, 90, 270, 400, 550), house_cost=50, mortgage_value=50),
+        Space(9, "Connecticut Avenue", SpaceType.PROPERTY, price=120, color_group="Light Blue", rent_schedule=(8, 40, 100, 300, 450, 600), house_cost=50, mortgage_value=60),
+        Space(10, "Jail / Just Visiting", SpaceType.CORNER),
+        Space(11, "St. Charles Place", SpaceType.PROPERTY, price=140, color_group="Pink", rent_schedule=(10, 50, 150, 450, 625, 750), house_cost=100, mortgage_value=70),
+        Space(12, "Electric Company", SpaceType.UTILITY, price=150, mortgage_value=75, notes="Rent is 4x or 10x dice roll."),
+        Space(13, "States Avenue", SpaceType.PROPERTY, price=140, color_group="Pink", rent_schedule=(10, 50, 150, 450, 625, 750), house_cost=100, mortgage_value=70),
+        Space(14, "Virginia Avenue", SpaceType.PROPERTY, price=160, color_group="Pink", rent_schedule=(12, 60, 180, 500, 700, 900), house_cost=100, mortgage_value=80),
+        Space(15, "Pennsylvania Railroad", SpaceType.RAILROAD, price=200, rent_schedule=(25, 50, 100, 200), mortgage_value=100),
+        Space(16, "St. James Place", SpaceType.PROPERTY, price=180, color_group="Orange", rent_schedule=(14, 70, 200, 550, 750, 950), house_cost=100, mortgage_value=90),
+        Space(17, "Community Chest", SpaceType.COMMUNITY_CHEST),
+        Space(18, "Tennessee Avenue", SpaceType.PROPERTY, price=180, color_group="Orange", rent_schedule=(14, 70, 200, 550, 750, 950), house_cost=100, mortgage_value=90),
+        Space(19, "New York Avenue", SpaceType.PROPERTY, price=200, color_group="Orange", rent_schedule=(16, 80, 220, 600, 800, 1000), house_cost=100, mortgage_value=100),
+        Space(20, "Free Parking", SpaceType.CORNER),
+        Space(21, "Kentucky Avenue", SpaceType.PROPERTY, price=220, color_group="Red", rent_schedule=(18, 90, 250, 700, 875, 1050), house_cost=150, mortgage_value=110),
+        Space(22, "Chance", SpaceType.CHANCE),
+        Space(23, "Indiana Avenue", SpaceType.PROPERTY, price=220, color_group="Red", rent_schedule=(18, 90, 250, 700, 875, 1050), house_cost=150, mortgage_value=110),
+        Space(24, "Illinois Avenue", SpaceType.PROPERTY, price=240, color_group="Red", rent_schedule=(20, 100, 300, 750, 925, 1100), house_cost=150, mortgage_value=120),
+        Space(25, "B. & O. Railroad", SpaceType.RAILROAD, price=200, rent_schedule=(25, 50, 100, 200), mortgage_value=100),
+        Space(26, "Atlantic Avenue", SpaceType.PROPERTY, price=260, color_group="Yellow", rent_schedule=(22, 110, 330, 800, 975, 1150), house_cost=150, mortgage_value=130),
+        Space(27, "Ventnor Avenue", SpaceType.PROPERTY, price=260, color_group="Yellow", rent_schedule=(22, 110, 330, 800, 975, 1150), house_cost=150, mortgage_value=130),
+        Space(28, "Water Works", SpaceType.UTILITY, price=150, mortgage_value=75, notes="Rent is 4x or 10x dice roll."),
+        Space(29, "Marvin Gardens", SpaceType.PROPERTY, price=280, color_group="Yellow", rent_schedule=(24, 120, 360, 850, 1025, 1200), house_cost=150, mortgage_value=140),
+        Space(30, "Go To Jail", SpaceType.GO_TO_JAIL),
+        Space(31, "Pacific Avenue", SpaceType.PROPERTY, price=300, color_group="Green", rent_schedule=(26, 130, 390, 900, 1100, 1275), house_cost=200, mortgage_value=150),
+        Space(32, "North Carolina Avenue", SpaceType.PROPERTY, price=300, color_group="Green", rent_schedule=(26, 130, 390, 900, 1100, 1275), house_cost=200, mortgage_value=150),
+        Space(33, "Community Chest", SpaceType.COMMUNITY_CHEST),
+        Space(34, "Pennsylvania Avenue", SpaceType.PROPERTY, price=320, color_group="Green", rent_schedule=(28, 150, 450, 1000, 1200, 1400), house_cost=200, mortgage_value=160),
+        Space(35, "Short Line", SpaceType.RAILROAD, price=200, rent_schedule=(25, 50, 100, 200), mortgage_value=100),
+        Space(36, "Chance", SpaceType.CHANCE),
+        Space(37, "Park Place", SpaceType.PROPERTY, price=350, color_group="Dark Blue", rent_schedule=(35, 175, 500, 1100, 1300, 1500), house_cost=200, mortgage_value=175),
+        Space(38, "Luxury Tax", SpaceType.TAX, notes="Pay $100."),
+        Space(39, "Boardwalk", SpaceType.PROPERTY, price=400, color_group="Dark Blue", rent_schedule=(50, 200, 600, 1400, 1700, 2000), house_cost=200, mortgage_value=200),
+    ]

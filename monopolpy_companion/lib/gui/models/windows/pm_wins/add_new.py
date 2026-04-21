@@ -1,8 +1,8 @@
 """ Define information for the Add New Player window """
 
-import PySimpleGUIQt as qt
+from monopolpy_companion.lib.gui import gui as qt
 
-from ..start import alerts
+from ..popups import alerts
 
 frame1 = [
     [qt.Text('Name:', font="Monopoly, Bold", text_color='#C70000'), qt.InputText(key='user_name')],
