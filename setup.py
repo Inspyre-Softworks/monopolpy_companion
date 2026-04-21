@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="monopolpy_companion",
-    version="1.3",
+    version="1.0.dev3",
     scripts=["monopolpy_companion.py"],
     author="Taylor-Jayde Blackstone",
     author_email="t.blackstone@inspyre.tech",
