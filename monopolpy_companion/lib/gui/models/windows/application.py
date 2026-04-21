@@ -1,6 +1,6 @@
 """Main landing window for the MonopolPy Companion shell."""
 
-import logging
+from inspy_logger import InspyLogger
 
 from monopolpy_companion.game.storage import save_session
 from monopolpy_companion.lib.common.settings import Config
@@ -15,7 +15,8 @@ from monopolpy_companion.lib.gui.models.windows.start import (
 
 
 name = "MonopolPyCompanion.GUI.ApplicationWindow"
-log = logging.getLogger(name)
+_log_device = InspyLogger.LogDevice(name, "warning")
+log = _log_device.start()
 
 gui.theme("DarkGreen1")
 

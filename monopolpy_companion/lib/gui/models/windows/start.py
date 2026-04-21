@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import logging
+from inspy_logger import InspyLogger
 
 from monopolpy_companion.game.models import create_standard_session
 from monopolpy_companion.game.storage import list_saved_sessions, load_session, save_session
 from monopolpy_companion.lib.gui import gui
 
-log = logging.getLogger(__name__)
+_log_device = InspyLogger.LogDevice("MonopolPyCompanion.GUI.StartDialogs", "warning")
+log = _log_device.start()
 
 
 def start_new_session_dialog():
