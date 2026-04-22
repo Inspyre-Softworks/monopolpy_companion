@@ -1,14 +1,14 @@
 """ Define information for the Add New Player window """
 
-from monopolpy_companion.lib.gui import gui as qt
+from monopolpy_companion.lib.gui import gui
 
-from ..popups import alerts
+from ...popups import alerts
 
 frame1 = [
-    [qt.Text('Name:', font="Monopoly, Bold", text_color='#C70000'), qt.InputText(key='user_name')],
-    [qt.Text('Gender:', font="Monopoly, Bold", text_color='#C70000'), qt.Radio('Male', group_id='gender',
+    [gui.Text('Name:', font="Monopoly, Bold", text_color='#C70000'), gui.InputText(key='user_name')],
+    [gui.Text('Gender:', font="Monopoly, Bold", text_color='#C70000'), gui.Radio('Male', group_id='gender',
                                                                                key='gender_radio_male'),
-     qt.Radio('Female', group_id='gender', key='gender_radio_female')]
+     gui.Radio('Female', group_id='gender', key='gender_radio_female')]
     ]
 
 

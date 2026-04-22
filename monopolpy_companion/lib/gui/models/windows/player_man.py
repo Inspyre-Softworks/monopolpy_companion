@@ -6,7 +6,7 @@ class PlayerManagerWindow:
 
         from monopolpy_companion.game.storage import save_session
         from monopolpy_companion.lib.common.state import get_current_session
-        from monopolpy_companion.lib.gui import qt as gui
+        from monopolpy_companion.lib.gui import gui
 
         log = logging.getLogger("MonopolPyCompanion.GUI.PlayerManagement")
         session = get_current_session()

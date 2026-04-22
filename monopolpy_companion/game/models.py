@@ -265,8 +265,11 @@ class GameSession:
         )
 
     def buy_property(self, player_id: str, space_index: int) -> PropertyState:
+        board = self.board
+        if space_index < 0 or space_index >= len(board):
+            raise ValueError(f"space_index {space_index} is out of range (0–{len(board) - 1})")
         player = self.get_player(player_id)
-        space = self.board[space_index]
+        space = board[space_index]
         if not space.ownable:
             raise ValueError(f"{space.name} is not ownable")
         state = self.get_property_state(space_index)

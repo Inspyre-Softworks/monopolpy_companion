@@ -15,6 +15,6 @@ conf = Config().data
 
 
 def run(cli_args=None, player_db_file=None):
-    from monopolpy_companion.lib.gui.models.windows import app_win
+    from monopolpy_companion.lib.gui.models.windows import application as app_win
 
-    return app_win()
+    return app_win.window()

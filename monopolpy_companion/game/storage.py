@@ -28,7 +28,7 @@ def default_session_path(session: GameSession) -> Path:
 
 def save_session(session: GameSession, path: str | Path | None = None) -> Path:
     ensure_runtime_dirs()
-    output_path = Path(path) if path is not None else default_session_path(session)
+    output_path = Path(path).expanduser() if path is not None else default_session_path(session)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(session.to_dict(), indent=2), encoding="utf-8")
     session.save_path = str(output_path)
