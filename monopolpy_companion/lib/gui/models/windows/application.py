@@ -1,6 +1,6 @@
 """Main landing window for the MonopolPy Companion shell."""
 
-import logging
+from inspy_logger import InspyLogger
 
 from monopolpy_companion.game.storage import save_session
 from monopolpy_companion.lib.common.settings import Config
@@ -15,7 +15,8 @@ from monopolpy_companion.lib.gui.models.windows.start import (
 
 
 name = "MonopolPyCompanion.GUI.ApplicationWindow"
-log = logging.getLogger(name)
+_log_device = InspyLogger.LogDevice(name, "warning")
+log = _log_device.start()
 
 gui.theme("DarkGreen1")
 
@@ -92,20 +93,30 @@ def window():
         if event == "save_session_button":
             session = get_current_session()
             if session is None:
-                gui.PopupOK("There is no active session to save.")
+                gui.PopupOK("No active session to save.")
             else:
-                path = save_session(session, session.save_path)
-                gui.PopupOK(f"Session saved to:\n{path}")
-                refresh_summary()
+                try:
+                    save_session(session, session.save_path)
+                except Exception as exc:
+                    log.error("Failed to save session: %s", exc)
+                    gui.PopupOK("Failed to save session.")
+                else:
+                    gui.PopupOK("Session saved.")
+                    refresh_summary()
 
         if event == "advance_turn_button":
             session = get_current_session()
             if session is None:
-                gui.PopupOK("There is no active session yet.")
+                gui.PopupOK("No active session.")
             else:
                 current_player = session.advance_turn()
-                save_session(session, session.save_path)
-                gui.PopupOK(f"It is now {current_player.name}'s turn.")
+                try:
+                    save_session(session, session.save_path)
+                except Exception as exc:
+                    log.error("Autosave failed after advancing turn: %s", exc)
+                    gui.PopupOK("Turn advanced, but autosave failed.")
+                else:
+                    gui.PopupOK(f"It is now {current_player.name}'s turn.")
                 refresh_summary()
 
     win.close()
