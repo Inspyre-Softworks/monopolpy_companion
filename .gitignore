@@ -1,5 +1,6 @@
 # Project exclude paths
 /venv/
+__pycache__/
 */__pycache__/
 */python2.7/
 */python3.7/

@@ -1,96 +1,125 @@
-""" Define information for the applications 'main' landing window """
+"""Main landing window for the MonopolPy Companion shell."""
 
-# Import Config
+from inspy_logger import InspyLogger
+
+from monopolpy_companion.game.storage import save_session
 from monopolpy_companion.lib.common.settings import Config
-import logging
+from monopolpy_companion.lib.common.state import get_current_session, set_current_session
+from monopolpy_companion.lib.gui import gui
+from monopolpy_companion.lib.gui.models.windows.options import OptionsWindow
+from monopolpy_companion.lib.gui.models.windows.player_man import PlayerManagerWindow
+from monopolpy_companion.lib.gui.models.windows.start import (
+    load_saved_session_dialog,
+    start_new_session_dialog,
+)
 
-name = 'MonopolPyCompanion.GUI.ApplicationWindow'
-log = logging.getLogger(name)
 
+name = "MonopolPyCompanion.GUI.ApplicationWindow"
+_log_device = InspyLogger.LogDevice(name, "warning")
+log = _log_device.start()
 
-# Load Config
-conf = Config().data
-
-# Load bytecode for icon
-from monopolpy_companion.lib.gui.models.images.icons.main_default import icon as app_icon
-
-# Load bytecode for button images
-from monopolpy_companion.lib.gui.models.images.buttons.app_win import start_new_button_img
-from monopolpy_companion.lib.gui.models.images.buttons.app_win import load_saved_button_img
-
-import PySimpleGUIQt as gui
-
-gui.ChangeLookAndFeel('DarkGreen1')
-
-button_frame = [
-    [gui.Button('', key='start_new_main_button',
-                image_data=start_new_button_img)],
-    [gui.Button('', key='load_saved_main_button',
-                image_data=load_saved_button_img)],
-    [gui.Button('Options', key='options_main_button', font=('Monopoly, Bold', 16))],
-    [gui.Button('Manage Players', key='play_man_main_button', font=('Monopoly, Bold', 16))]
-    ]
-
-frame = [
-    [gui.Text('Welcome to Monopolpy Companion!', justification='center', background_color='#C70000',
-              font=('Monopoly, Bold', 18))],
-    [gui.Frame('What would you like to do', button_frame, title_location='center-top', background_color='#99FFFFFF',
-               title_color='#000000')],
-    [gui.Button('Exit', key='exit_button_main_application')]
-    ]
-
-main_layout = [
-    [gui.Frame('', frame, background_color=('#408FBC72'))]
-    ]
-
-menu_def = ['My Menu Def',
-            ['&Restore', '&Open', '---', '&Message', '&Save', ['1', '2', ['a', 'b']], '&Properties', 'E&xit']]
-tray = gui.SystemTray(menu=menu_def, data_base64=app_icon)
-
-win = gui.Window('Monopolpy Companion', main_layout,
-                 background_image='monopolpy.png',
-                 grab_anywhere=conf['gui_settings']['grab_anywhere'],
-                 icon=app_icon,
-                 location=(450, 100),
-                 resizable=False
-                 )
+gui.theme("DarkGreen1")
 
 
 def window():
-    global conf, log
-    from monopolpy_companion.lib.common.run import opts_win_active
-    from monopolpy_companion.lib.helpers.popup_man import nyi
-    from monopolpy_companion.lib.
+    config_manager = Config()
+    conf = config_manager.data
+    layout = [
+        [gui.Text("MonopolPy Companion", font=("Monopoly, Bold", 18))],
+        [gui.Text("A Monopoly session assistant: banker, tracker, and save/load shell.")],
+        [gui.Multiline("", size=(70, 12), key="session_summary", disabled=True, autoscroll=False)],
+        [
+            gui.Button("Start New", key="start_new_main_button"),
+            gui.Button("Load Saved", key="load_saved_main_button"),
+            gui.Button("Options", key="options_main_button"),
+            gui.Button("Manage Players", key="play_man_main_button"),
+        ],
+        [gui.Button("Save Session", key="save_session_button"), gui.Button("Advance Turn", key="advance_turn_button")],
+        [gui.Button("Exit", key="exit_button_main_application")],
+    ]
+    win = gui.Window(
+        "Monopolpy Companion",
+        layout,
+        grab_anywhere=conf["gui_settings"]["grab_anywhere"],
+        location=(450, 100),
+        resizable=False,
+        finalize=True,
+    )
 
+    def refresh_summary() -> None:
+        session = get_current_session()
+        if session is None:
+            summary = [
+                "No active session.",
+                "",
+                'Use "Start New" to create a Monopoly companion session.',
+                'Use "Load Saved" to reopen a previous session file.',
+            ]
+        else:
+            summary = session.summary_lines()
+            if session.save_path:
+                summary.append(f"Save file: {session.save_path}")
+        win["session_summary"].update("\n".join(summary))
+
+    refresh_summary()
     while True:
         event, values = win.read(timeout=100)
 
-        if event is None or event == 'exit_button_main_application':
-            log.info('User indicated a desire to exit the application.')
+        if event is None or event == "exit_button_main_application":
+            log.info("User indicated a desire to exit the application.")
             break
 
-        if not opts_win_active and event == 'options_main_button':
-            from monopolpy_companion.lib.gui.models.windows.options import OptionsWindow
+        if event == "start_new_main_button":
+            session = start_new_session_dialog()
+            if session is not None:
+                set_current_session(session)
+                refresh_summary()
 
-            log.debug('User indicated a desire to open the options window')
+        if event == "load_saved_main_button":
+            session = load_saved_session_dialog()
+            if session is not None:
+                set_current_session(session)
+                refresh_summary()
 
-            opts_win_active = True
+        if event == "options_main_button":
             OptionsWindow(conf)
-            log.debug('Options window has been left')
+            conf = Config().data
+            refresh_summary()
 
-            opts_win_active = False
-            log.debug(f'Options Window Active: {opts_win_active}')
+        if event == "play_man_main_button":
+            PlayerManagerWindow()
+            refresh_summary()
 
+        if event == "save_session_button":
+            session = get_current_session()
+            if session is None:
+                gui.PopupOK("No active session to save.")
+            else:
+                try:
+                    save_session(session, session.save_path)
+                except Exception as exc:
+                    log.error("Failed to save session: %s", exc)
+                    gui.PopupOK("Failed to save session.")
+                else:
+                    gui.PopupOK("Session saved.")
+                    refresh_summary()
 
+        if event == "advance_turn_button":
+            session = get_current_session()
+            if session is None:
+                gui.PopupOK("No active session.")
+            else:
+                current_player = session.advance_turn()
+                try:
+                    save_session(session, session.save_path)
+                except Exception as exc:
+                    log.error("Autosave failed after advancing turn: %s", exc)
+                    gui.PopupOK("Turn advanced, but autosave failed.")
+                else:
+                    gui.PopupOK(f"It is now {current_player.name}'s turn.")
+                refresh_summary()
 
-        if event == 'start_new_main_button':
-            nyi('Start New Game')
-
-        if event == 'load_saved_main_button':
-            nyi('Load saved game')
+    win.close()
 
 
 active = False
-
-if __name__ == '__main__':
-    print('Application is not a function')

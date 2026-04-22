@@ -1,5 +1,4 @@
 
-PySimpleGUIQt==0.35.0
-pyyaml==6.0
-colorlog==6.7.0
-PySimpleGUI==4.60.3
+pyyaml==6.0.3
+colorlog==6.10.1
+pysimplegui-4-foss==4.60.4.1

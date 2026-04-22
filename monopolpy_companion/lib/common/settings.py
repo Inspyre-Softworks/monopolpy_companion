@@ -1,52 +1,65 @@
+from __future__ import annotations
+
 import logging
-import os
+from pathlib import Path
+
 import yaml
 
+from monopolpy_companion.lib.common.paths import (
+    DEFAULT_CONFIG_FILE,
+    PLAYER_DB_FILE,
+    USER_CONFIG_FILE,
+    ensure_runtime_dirs,
+)
 
-logger = logging.getLogger('MonopolpyCompanion.' + __name__)
+
+logger = logging.getLogger("MonopolpyCompanion." + __name__)
 
 
 class Config:
     """Configuration handler for the application."""
 
-    def __init__(self, file=None):
-        logger.info(f'Logger started for {logger.name}')
+    def __init__(self, file: str | Path | None = None):
+        ensure_runtime_dirs()
+        self.source_file = Path(file).expanduser() if file is not None else USER_CONFIG_FILE
         self.data = self.load(file)
 
-    def load(self, file=None):
-        """Load configuration data from *file*.
+    def load(self, file: str | Path | None = None):
+        """Load configuration data from *file* or the user/default config chain."""
+        source_file = Path(file).expanduser() if file is not None else self.source_file
+        base_data = {}
 
-        Falls back to the default configuration file when *file* is ``None``.
-        Missing keys are handled gracefully with defaults and warnings logged
-        instead of printing to stdout.
-        """
-        if file is None:
-            logger.debug('A custom config file was not provided!')
-            file = os.getcwd() + '/conf/default.yml'
+        if DEFAULT_CONFIG_FILE.exists():
+            with DEFAULT_CONFIG_FILE.open(encoding="utf-8") as handle:
+                base_data = yaml.safe_load(handle) or {}
 
-        with open(file) as res:
-            data = yaml.safe_load(res)
+        if source_file.exists() and source_file != DEFAULT_CONFIG_FILE:
+            with source_file.open(encoding="utf-8") as handle:
+                user_data = yaml.safe_load(handle) or {}
+            base_data = _deep_merge(base_data, user_data)
 
-        gui_settings = data.setdefault('gui_settings', {})
-        if gui_settings.get('grab_anywhere') is None:
-            logger.warning("Missing 'grab_anywhere' in gui_settings; defaulting to False")
-            gui_settings['grab_anywhere'] = False
+        gui_settings = base_data.setdefault("gui_settings", {})
+        gui_settings.setdefault("grab_anywhere", False)
+        base_data.setdefault("player_database", str(PLAYER_DB_FILE))
+        base_data["player_database"] = str(Path(base_data["player_database"]).expanduser())
 
-        return data
+        return base_data
 
-    def write(self, file=None):
-        """Write configuration data to *file*.
-
-        If *file* is ``None``, the default configuration path is used.
-        """
-        if file is None:
-            logger.warning('Output file not provided; using default file')
-            file = os.getcwd() + '/conf/default.yml'
-
-        with open(file, 'w') as outfile:
-            yaml.safe_dump(self.data, outfile, default_flow_style=False)
+    def write(self, file: str | Path | None = None):
+        """Write configuration data to *file* or the user config path."""
+        ensure_runtime_dirs()
+        output_file = Path(file).expanduser() if file is not None else self.source_file
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with output_file.open("w", encoding="utf-8") as outfile:
+            yaml.safe_dump(self.data, outfile, default_flow_style=False, sort_keys=False)
+        self.source_file = output_file
 
 
-if __name__ == '__main__':
-    print("That's not how you use this")
-    exit()
+def _deep_merge(base: dict, override: dict) -> dict:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
