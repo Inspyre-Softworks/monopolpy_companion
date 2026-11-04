@@ -8,6 +8,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Modern card-based desktop layout, prominent deed ownership panel,
+  selected player wallet summary, and successful-purchase confirmation.
+- Kabel Heavy font detection when installed, with geometric typography
+  fallbacks and user-licensed font-file loading via MONOPOLPY_FONT_FILE.
+- Qt smoke tests for purchasing after landing and using the buy button,
+  including ownership, balance, ledger and persisted save verification.
 - PIN-lockable player accounts using salted one-way hashes and session-scoped unlocks.
 - Persisted gameplay and financial reports, rent breakdowns by player and deed,
   and virtual dice rolls with per-player statistics.
@@ -29,6 +35,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Automated library unit-test workflow across Python 3.10, 3.12 and 3.13.
 
 ### Changed
+- Restyled tables, panels, toolbars and controls for a contemporary layout.
+- Updated packaging version to 1.0.dev8.
 - Updated packaging to version 1.0.dev7 and registered the Poetry CLI script.
 - Bumped both package metadata files to 1.0.dev6.
 - Made the Qt dashboard the --gui entry point and retained the original shell

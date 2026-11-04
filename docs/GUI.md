@@ -106,3 +106,26 @@ QT_QPA_PLATFORM=offscreen python -m unittest tests.test_qt_gui -v
 ```
 
 On Windows, run the same test without the display environment override.
+
+## Display font and modern purchase feedback
+
+The distinctive lettering in the Monopoly logo is Kabel Heavy, a commercial
+font. MonopolPy uses Kabel automatically if it is already installed and
+detectable by Qt; otherwise it chooses a similarly geometric installed font
+before falling back to a readable system UI font. No commercial font binary is
+bundled.
+
+To load a legitimately licensed font from another location, set
+`MONOPOLPY_FONT_FILE` to a local TTF or OTF file before starting the GUI:
+
+```powershell
+$env:MONOPOLPY_FONT_FILE = 'C:\\Fonts\\Kabel-Heavy.otf'
+poetry run monopolpy-companion --gui
+```
+
+The redesigned dashboard has a branded header, clean surface cards and a
+persistent selected-deed preview. After purchase, it selects the acquired
+property, shows the current owner and rent, updates the player's wallet, and
+displays a confirmation with the exact paid amount and remaining balance.
+Both purchase paths (manual buy and a purchase decision after dice movement)
+are covered by offscreen GUI regression tests.

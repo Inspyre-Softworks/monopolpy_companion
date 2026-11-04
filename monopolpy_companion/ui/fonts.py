@@ -6,6 +6,9 @@ font if the user has one, and never bundles proprietary font files.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from PySide6.QtGui import QFont, QFontDatabase
 
 _DISPLAY_FAMILIES = (
@@ -51,3 +54,17 @@ def body_font(point_size: int = 10) -> QFont:
 def display_family() -> str:
     """Expose the available display family for QSS style rules."""
     return _available_family(_DISPLAY_FAMILIES)
+
+def load_user_font() -> bool:
+    """Register an optional font file owned and licensed by the user.
+
+    The MONOPOLPY_FONT_FILE environment variable can point to an installed
+    or otherwise legitimately licensed TTF/OTF font. No font binary is
+    shipped with MonopolPy Companion.
+
+    Returns:
+        True when Qt successfully registered the given font file.
+    """
+    source = os.environ.get('MONOPOLPY_FONT_FILE', '').strip()
+    return bool(source and Path(source).is_file()
+                and QFontDatabase.addApplicationFont(source) >= 0)

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "monopolpy_companion"
-version = "1.0.dev7"
+version = "1.0.dev8"
 description = "Electronic banker, game engine, and optional desktop GUI for physical Monopoly"
 authors = ["Taylor B. <43686206+tayjaybabee@users.noreply.github.com>"]
 readme = "README.md"
