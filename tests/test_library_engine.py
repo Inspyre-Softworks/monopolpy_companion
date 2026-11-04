@@ -7,11 +7,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from monopolpy_companion.game import GameEngine, SessionRepository, create_standard_session
+from monopolpy_companion import GameEngine, SessionRepository, create_standard_session
+from monopolpy_companion.game import GameEngine as GameEngineFromGame
+from monopolpy_companion.game import SessionRepository as SessionRepositoryFromGame
 
 
 class GameEngineTests(unittest.TestCase):
     """Test the banker and game rules without a desktop or logging dependency."""
+
+    def test_package_root_exports_match_game_subpackage(self) -> None:
+        self.assertIs(GameEngine, GameEngineFromGame)
+        self.assertIs(SessionRepository, SessionRepositoryFromGame)
 
     def setUp(self) -> None:
         self.session = create_standard_session("Test", ["Taylor", "Dave"])
