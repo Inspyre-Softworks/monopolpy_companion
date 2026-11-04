@@ -119,7 +119,7 @@ class GameEngineTests(unittest.TestCase):
             loaded = repository.load(path)
             self.assertEqual(loaded.owner_for(1).player_id, self.taylor.player_id)
             self.assertEqual(repository.list_sessions()[0].display_name, "Test")
-            with self.assertRaises(TypeError):
+            with self.assertRaises(AttributeError):
                 repository.save(object(), path)
             self.assertEqual(path.read_text(encoding="utf-8"), original)
 
