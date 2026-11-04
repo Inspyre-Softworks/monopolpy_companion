@@ -2,12 +2,12 @@
 
 A reusable Python library for managing money, property ownership, movement,
 rent, mortgages, buildings, and save files while playing **physical Monopoly**.
-The Monopoly-styled PySide6 desktop dashboard is optional, with PIN-protected
+The updated PySide6 dashboard uses a modern board-inspired card layout, Kabel-style display typography (when installed), and immediately visible purchase confirmations.\n\nThe Monopoly-styled PySide6 desktop dashboard is optional, with PIN-protected
 player accounts, statistics, a dice simulator and a mortgage calculator.
 The old PySimpleGUI
 shell remains available for migration.
 
-**Python:** 3.10+ | **Logging:** InspyLogger 3.x | **Version:** 1.0.dev7
+**Python:** 3.10+ | **Logging:** InspyLogger 3.x | **Version:** 1.0.dev8
 
 Headless library: `python -m pip install .`
 

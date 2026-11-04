@@ -10,6 +10,7 @@ from monopolpy_companion.controller import SessionController
 from .main_window import MainWindow
 from .branding import make_app_icon
 from .theme import stylesheet
+from .fonts import body_font, load_user_font
 
 
 def run() -> int:
@@ -18,6 +19,9 @@ def run() -> int:
     owns_app = application is None
     if application is None:
         application = QApplication(sys.argv)
+    load_user_font()
+    application.setStyle('Fusion')
+    application.setFont(body_font(10))
     application.setApplicationName('MonopolPy Companion')
     application.setWindowIcon(make_app_icon())
     application.setOrganizationName('Inspyre Softworks')
