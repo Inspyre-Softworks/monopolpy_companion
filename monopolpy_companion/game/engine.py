@@ -256,7 +256,9 @@ class GameEngine:
             index = (self.session.current_turn_index + offset) % len(players)
             if not players[index].bankrupt:
                 self.session.current_turn_index = index
-                self.session.turn_counts[players[index].player_id] = (\n                    self.session.turn_counts.get(players[index].player_id, 0) + 1\n                )
+                self.session.turn_counts[players[index].player_id] = (
+                    self.session.turn_counts.get(players[index].player_id, 0) + 1
+                )
                 self.session.touch()
                 self._emit('turn_advanced', player_id=players[index].player_id)
                 return players[index]
