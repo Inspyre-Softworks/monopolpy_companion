@@ -1,17 +1,21 @@
 [tool.poetry]
 name = "monopolpy_companion"
-version = "1.0.dev4"
-description = ""
+version = "1.0.dev5"
+description = "Headless electronic banker and rules library for physical Monopoly games"
 authors = ["Taylor B. <43686206+tayjaybabee@users.noreply.github.com>"]
+readme = "README.md"
+packages = [{ include = "monopolpy_companion" }]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.11"
-inspy-logger = "2.1a14"
-PyYAML = "^6.0"
-"pysimplegui-4-foss" = "^4.60.4.1"
+python = ">=3.10,<4.0"
+inspy-logger = ">=3.2.4,<4.0"
+PyYAML = { version = "^6.0", optional = true }
+"pysimplegui-4-foss" = { version = "^4.60.4.1", optional = true }
+colorlog = { version = "^6.10.1", optional = true }
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.extras]
+gui = ["PyYAML", "pysimplegui-4-foss", "colorlog"]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

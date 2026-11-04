@@ -15,8 +15,7 @@ from monopolpy_companion.lib.gui.models.windows.start import (
 
 
 name = "MonopolPyCompanion.GUI.ApplicationWindow"
-_log_device = InspyLogger.LogDevice(name, "warning")
-log = _log_device.start()
+log = InspyLogger(name, console_level='warning', no_file_logging=True)
 
 gui.theme("DarkGreen1")
 

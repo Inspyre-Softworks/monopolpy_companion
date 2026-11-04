@@ -1,3 +1,32 @@
+# MonopolPy Companion
+
+A reusable Python library for managing money, property ownership, movement,
+rent, mortgages, buildings, and save files while playing **physical Monopoly**.
+The legacy desktop shell remains available as an optional extra; a redesigned
+GUI is the next development phase.
+
+**Python:** 3.10+ | **Logging:** InspyLogger 3.x | **Version:** 1.0.dev5
+
+Install the headless library: `python -m pip install .`
+
+Install the experimental GUI: `python -m pip install '.[gui]'`
+
+```python
+from monopolpy_companion.game import GameEngine, SessionRepository, create_standard_session
+
+session = create_standard_session('Game Night', ['Avery', 'Blake'])
+engine = GameEngine(session)
+engine.purchase(session.players[0].player_id, 1)
+engine.move_by_dice(session.players[0].player_id, 2, 3)
+SessionRepository().save(session)
+```
+
+See [Library API](docs/LIBRARY_API.md),
+[Architecture](docs/LIBRARY_ARCHITECTURE.md),
+and the [playable companion roadmap](docs/PLAYABLE_COMPANION_ROADMAP.md).
+
+## Original project notes
+
 [![Updates](https://pyup.io/repos/github/Inspyre-Softworks/monopolpy_companion/shield.svg)](https://pyup.io/repos/github/Inspyre-Softworks/monopolpy_companion/) [![Python 3](https://pyup.io/repos/github/Inspyre-Softworks/monopolpy_companion/python-3-shield.svg)](https://pyup.io/repos/github/Inspyre-Softworks/monopolpy_companion/)
 
 
@@ -29,3 +58,4 @@ The MonopolPy Companion App aims to provide useful utilities that will help you 
          - Loans
 
      
+
