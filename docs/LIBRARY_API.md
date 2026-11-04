@@ -9,12 +9,18 @@ For headless library use:
 
     python -m pip install .
 
-For the existing experimental desktop shell:
+For the new desktop GUI:
 
     python -m pip install '.[gui]'
+    monopolpy-companion --gui
 
-Requires Python 3.10 or newer and InspyLogger 3.x. The GUI is optional.
-Poetry users can run `poetry install -E gui` to install the legacy shell.
+The original PySimpleGUI shell uses `pip install '.[legacy-gui]'`
+and `monopolpy-companion --legacy-gui`. The headless library does not
+depend on either GUI toolkit.
+
+Requires Python 3.10+ and InspyLogger 3.x. Poetry users may install the
+new desktop extra with `poetry install -E gui` after refreshing the
+Poetry lockfile for updated dependency metadata.
 
 ## Quick start
 
@@ -83,11 +89,13 @@ or `KeyError` before modifying cash/deeds. Calls that transfer cash emit a
 
 ## GUI integration contract
 
-A future GUI should hold one GameEngine per active GameSession. Bind controls
-to engine operations and refresh view models from `GameEvent` notifications.
-Observers do not control a transaction: subscriber failures are logged without
-undoing an action. Pass an optional logger to `GameEngine(session, logger=...)`
-for app-wide logging policies.
+The new Qt GUI uses `SessionController` to manage a GameSession,
+GameEngine, SessionRepository and automatic saving after actions.
+Its `perform(action, ...)` method restricts commands to the supported
+game operations, dispatching events only once each action is complete.
+Observer failures are logged without aborting a game operation. A
+`SessionSaveError` specifically means the game action succeeded but
+its save failed. Applications can inject an InspyLogger-compatible logger.
 
 The engine is synchronous, not thread-safe, and should be called from one
 game-state controller. For consistency, do not bypass its operations by
@@ -98,8 +106,8 @@ mutating GameSession dataclasses directly.
 `SessionRepository(directory)` saves in the same JSON schema as the existing
 GUI and uses a temporary file plus atomic rename. The original `save_session`,
 `load_session`, and `list_saved_sessions` functions forward to the repository.
-`save_path` is updated only after a successful save. No automatic saving is
-performed by GameEngine; the future controller should autosave after events.
+`save_path` is updated only after a successful save. No automatic saving is performed directly by GameEngine. SessionController
+autosaves completed actions, with observer notifications after saving.
 
 CLI: `monopolpy-companion --list-sessions` or
 `monopolpy-companion --summary path/to/session.json`.
@@ -110,4 +118,4 @@ Chance/Community Chest decks, auctions, property trades, full bankruptcy
 settlements, rent immunity/loans, PIN authentication, full jail-turn/doubles
 sequencing, and rule presets are future modules. Do not present their outcomes
 as automatically resolved by this foundation. The existing experimental GUI
-will be upgraded separately.
+remains available separately. See [GUI guide](GUI.md).

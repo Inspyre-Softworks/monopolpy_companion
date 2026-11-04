@@ -8,6 +8,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- A Qt/PySide6 desktop dashboard with session setup, save/load, banker,
+  dice movement, board/deed overview, rent, mortgages, building controls,
+  jail actions, and transaction history.
+- Reusable UI widgets with explicit labels, tooltips and accessible descriptions,
+  plus light and dark themes.
+- A GUI-independent SessionController that coordinates state, events and autosave.
+- Qt offscreen smoke tests and a dedicated optional GUI CI job.
 - A headless GameEngine with validated banking, board movement, rent,
   mortgages, buildings, jail actions and completed-action subscriptions.
 - Atomic SessionRepository with original save-format compatibility.
@@ -16,6 +23,9 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Automated library unit-test workflow across Python 3.10, 3.12 and 3.13.
 
 ### Changed
+- Bumped both package metadata files to 1.0.dev6.
+- Made the Qt dashboard the --gui entry point and retained the original shell
+  under --legacy-gui with its own optional dependencies.
 - Updated InspyLogger integration to the current 3.x API.
 - Made experimental GUI dependencies optional instead of core requirements.
 - Updated package metadata and Python floor, synchronizing version 1.0.dev5.

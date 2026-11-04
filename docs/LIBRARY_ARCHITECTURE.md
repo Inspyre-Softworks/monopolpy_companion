@@ -3,8 +3,12 @@
 The package separates domain data, game operations, persistence, logging and UI.
 
 ```text
-GUI (next phase) / CLI / third-party integrations
+Qt GUI / CLI / third-party integrations
                  |
+           SessionController
+              |          |
+              |     SessionRepository ---> JSON saves
+              |
               GameEngine  ---> GameEvent subscribers
                  |
               GameSession ---> Player, PropertyState, Transaction
@@ -40,10 +44,18 @@ import GUI modules. The GUI can depend on the library, not vice versa.
 7. New modules should use typed interfaces, single-quoted Python strings and
    Google-style docstrings, with standard unittest regression tests.
 
-## Next phase: desktop controller
+## Desktop integration
 
-Introduce a `SessionController` that owns the engine and repository, handles
-autosave on successful events, translates errors for display, and exposes
-read-only view models. The GUI should not call `GameSession.transfer_cash`,
-`GameSession.buy_property` or `GameSession.advance_turn` directly. Keep
-rules and transactions in the library so unit tests remain headless.
+`SessionController` owns the session, engine and persistence. Its
+`perform()` operation validates the supported action, runs the headless
+engine, autosaves and then sends a completed-action notification to observers.
+The Qt `MainWindow` and input dialogs only collect and render data;
+they never call `GameSession.transfer_cash`, `GameSession.buy_property`
+or `GameSession.advance_turn` directly.
+
+Desktop widgets use descriptive text, tooltips and accessible names, with
+two selectable stylesheet palettes. The old GUI remains isolated as an
+optional legacy entry point. See [Desktop GUI guide](GUI.md).
+
+Next work: fully automate decks, auctions, trading, bankruptcy resolution
+and the complete jail/turn policy while keeping those rules in `game/`.

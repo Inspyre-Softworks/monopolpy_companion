@@ -1,0 +1,485 @@
+"""Main PySide6 desktop dashboard for a physical Monopoly game.
+
+This module contains display logic only. All banking, movement, ownership
+and building rules are delegated to SessionController and GameEngine.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import (
+    QApplication, QComboBox, QDialog, QFileDialog, QGridLayout,
+    QGroupBox, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
+    QSpinBox, QSplitter, QTableWidgetItem, QToolBar, QVBoxLayout, QWidget,
+)
+
+from monopolpy_companion.controller import SessionController, SessionSaveError
+from monopolpy_companion.game import GameSession, SpaceType
+
+from .dialogs import NewSessionDialog, TransferDialog
+from .theme import stylesheet
+from .widgets import HelpButton, ReadOnlyTable
+
+
+class MainWindow(QMainWindow):
+    """Main game dashboard with distinct player, board and ledger views.
+
+    Args:
+        controller: Headless session controller. A new one is constructed
+            automatically if no controller is supplied.
+    """
+
+    def __init__(self, controller: SessionController | None = None) -> None:
+        super().__init__()
+        self.controller = controller or SessionController()
+        self._dark_theme = True
+        self._action_buttons: list[HelpButton] = []
+        self._build_ui()
+        self.controller.subscribe(lambda _event: self.refresh())
+        self.refresh()
+
+    def _build_ui(self) -> None:
+        """Create accessible, reusable views and action controls."""
+        self.setWindowTitle('MonopolPy Companion — Game Dashboard')
+        self.resize(1180, 790)
+        self.setMinimumSize(920, 590)
+
+        toolbar = QToolBar('Game commands', self)
+        toolbar.setMovable(False)
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.addToolBar(toolbar)
+
+        self.new_action = self._toolbar_action(
+            toolbar, 'New game', 'Create a new session with two or more players',
+            self._new_game,
+        )
+        self.open_action = self._toolbar_action(
+            toolbar, 'Open', 'Load a saved JSON session', self._open_game
+        )
+        self.save_action = self._toolbar_action(
+            toolbar, 'Save', 'Save all cash balances and game state', self._save
+        )
+        toolbar.addSeparator()
+        self.next_action = self._toolbar_action(
+            toolbar, 'Next turn', 'Advance to the next nonbankrupt player',
+            lambda: self._perform('advance_turn'),
+        )
+        toolbar.addSeparator()
+        self.theme_action = self._toolbar_action(
+            toolbar, 'Light theme', 'Switch between light and dark colors',
+            self._toggle_theme,
+        )
+
+        central = QWidget(self)
+        self.setCentralWidget(central)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(16, 12, 16, 12)
+        root.setSpacing(9)
+
+        title = QLabel('MonopolPy Companion')
+        title.setObjectName('headerTitle')
+        root.addWidget(title)
+        self.subtitle = QLabel('Start a game or open a save to begin.')
+        self.subtitle.setObjectName('subTitle')
+        root.addWidget(self.subtitle)
+
+        column_splitter = QSplitter(Qt.Orientation.Horizontal)
+        column_splitter.addWidget(self._build_player_group())
+        column_splitter.addWidget(self._build_board_group())
+        column_splitter.setStretchFactor(0, 3)
+        column_splitter.setStretchFactor(1, 5)
+
+        vertical_splitter = QSplitter(Qt.Orientation.Vertical)
+        vertical_splitter.addWidget(column_splitter)
+        vertical_splitter.addWidget(self._build_ledger_group())
+        vertical_splitter.setStretchFactor(0, 5)
+        vertical_splitter.setStretchFactor(1, 2)
+        root.addWidget(vertical_splitter, stretch=1)
+
+        self.statusBar().showMessage(
+            'New game: create players. Open: resume an existing session.'
+        )
+
+    def _toolbar_action(
+        self, toolbar: QToolBar, name: str, help_text: str, callback
+    ) -> QAction:
+        """Create one textual, described toolbar action."""
+        action = QAction(name, self)
+        action.setToolTip(help_text)
+        action.setStatusTip(help_text)
+        action.triggered.connect(callback)
+        toolbar.addAction(action)
+        return action
+
+    def _button(
+        self, label: str, help_text: str, callback, layout: QGridLayout,
+        row: int, column: int
+    ) -> HelpButton:
+        """Create and register a game action button for enablement updates."""
+        button = HelpButton(label, help_text, self)
+        button.clicked.connect(callback)
+        layout.addWidget(button, row, column)
+        self._action_buttons.append(button)
+        return button
+
+    def _build_player_group(self) -> QGroupBox:
+        """Build the players, dice and payment controls."""
+        group = QGroupBox('Players & banker')
+        layout = QVBoxLayout(group)
+        layout.addWidget(QLabel('Active player for actions:'))
+        self.player_picker = QComboBox()
+        self.player_picker.setToolTip(
+            'Select which player moves, buys, pays tax, or manages assets.'
+        )
+        layout.addWidget(self.player_picker)
+
+        self.player_table = ReadOnlyTable(
+            ['Player', 'Cash', 'Position', 'Assets', 'Status'],
+            'All player balances and owned deed counts in the active game.',
+        )
+        layout.addWidget(self.player_table, stretch=1)
+
+        dice_row = QHBoxLayout()
+        dice_row.addWidget(QLabel('Dice:'))
+        self.die_one = QSpinBox()
+        self.die_two = QSpinBox()
+        for die in (self.die_one, self.die_two):
+            die.setRange(1, 6)
+            die.setValue(3)
+            die.setToolTip('Choose the actual rolled result, 1 to 6.')
+            dice_row.addWidget(die)
+        dice_row.addStretch()
+        layout.addLayout(dice_row)
+
+        buttons = QGridLayout()
+        self._button(
+            'Move by dice', 'Advance the selected player by the two die values.',
+            self._move_by_dice, buttons, 0, 0,
+        )
+        self._button(
+            'Transfer money', 'Transfer Monopoly dollars between the bank and players.',
+            self._transfer, buttons, 0, 1,
+        )
+        self._button(
+            'Send to jail', 'Move the selected player directly to jail.',
+            lambda: self._player_action('send_to_jail'), buttons, 1, 0,
+        )
+        self._button(
+            'Release from jail', 'Pay a $50 fine, use a card, or record verified doubles.',
+            self._release_from_jail, buttons, 1, 1,
+        )
+        layout.addLayout(buttons)
+        return group
+
+    def _build_board_group(self) -> QGroupBox:
+        """Build a selectable board list with property actions."""
+        group = QGroupBox('Board & properties')
+        layout = QVBoxLayout(group)
+        layout.addWidget(QLabel('Select a board space, then choose a rule action.'))
+        self.board_table = ReadOnlyTable(
+            ['#', 'Board space', 'Type', 'Owner', 'Development', 'Rent'],
+            'All 40 Monopoly spaces; choose a row before purchasing or collecting rent.',
+        )
+        self.board_table.setMinimumHeight(290)
+        layout.addWidget(self.board_table, stretch=1)
+        buttons = QGridLayout()
+        self._button(
+            'Buy property', 'Purchase the selected unowned deed for the active player.',
+            lambda: self._board_action('purchase'), buttons, 0, 0,
+        )
+        self._button(
+            'Collect rent', 'Collect rent from the active player for the selected deed.',
+            self._collect_rent, buttons, 0, 1,
+        )
+        self._button(
+            'Mortgage', 'Borrow half the printed price against the selected owned deed.',
+            lambda: self._board_action('mortgage'), buttons, 1, 0,
+        )
+        self._button(
+            'Unmortgage', 'Repay the mortgage plus ten percent interest.',
+            lambda: self._board_action('unmortgage'), buttons, 1, 1,
+        )
+        self._button(
+            'Build house / hotel', 'Buy evenly across an owned unmortgaged color group.',
+            lambda: self._board_action('buy_building'), buttons, 2, 0,
+        )
+        self._button(
+            'Sell building', 'Sell a house or downgrade a hotel for half its cost.',
+            lambda: self._board_action('sell_building'), buttons, 2, 1,
+        )
+        self._button(
+            'Pay tax', 'Pay the printed tax on Income Tax or Luxury Tax.',
+            lambda: self._board_action('pay_tax'), buttons, 3, 0,
+        )
+        layout.addLayout(buttons)
+        return group
+
+    def _build_ledger_group(self) -> QGroupBox:
+        """Build the most recent transaction-history view."""
+        group = QGroupBox('Recent transactions')
+        layout = QVBoxLayout(group)
+        self.ledger_table = ReadOnlyTable(
+            ['When (UTC)', 'Action', 'Amount', 'Details'],
+            'The latest 100 recorded transactions, most recent first.',
+        )
+        layout.addWidget(self.ledger_table)
+        return group
+
+    @staticmethod
+    def _fill(row: int, values: list[str], table: ReadOnlyTable) -> None:
+        """Populate a read-only row without allowing edited game state."""
+        for col, value in enumerate(values):
+            item = QTableWidgetItem(str(value))
+            table.setItem(row, col, item)
+
+    def refresh(self) -> None:
+        """Recreate view data from the authoritative game session."""
+        session = self.controller.session
+        has_game = session is not None
+        self.save_action.setEnabled(has_game)
+        self.next_action.setEnabled(has_game)
+        for button in self._action_buttons:
+            button.setEnabled(has_game)
+        self.player_picker.setEnabled(has_game)
+        self.player_table.setEnabled(has_game)
+        self.board_table.setEnabled(has_game)
+        self.die_one.setEnabled(has_game)
+        self.die_two.setEnabled(has_game)
+        if session is None:
+            self.subtitle.setText('No active game — create or load a saved session.')
+            self.player_picker.clear()
+            self.player_table.setRowCount(0)
+            self.board_table.setRowCount(0)
+            self.ledger_table.setRowCount(0)
+            return
+
+        current_id = self.player_picker.currentData()
+        selected_row = self.board_table.currentRow()
+        self.player_picker.blockSignals(True)
+        self.player_picker.clear()
+        for player in session.players:
+            self.player_picker.addItem(player.name, player.player_id)
+        if current_id:
+            index = self.player_picker.findData(current_id)
+            if index >= 0:
+                self.player_picker.setCurrentIndex(index)
+        self.player_picker.blockSignals(False)
+
+        current = session.current_player
+        turn_label = current.name if current is not None else 'None'
+        self.subtitle.setText(
+            f'{session.name}  •  Turn: {turn_label}  •  '
+            f'{len(session.players)} players  •  Autosave enabled'
+        )
+
+        self.player_table.setRowCount(len(session.players))
+        board = session.board
+        for row, player in enumerate(session.players):
+            owned = session.owned_spaces_for(player.player_id)
+            status = 'Bankrupt' if player.bankrupt else (
+                'In jail' if player.in_jail else 'Playing'
+            )
+            values = [
+                player.name, f'${player.cash:,}',
+                f'{player.position}: {board[player.position].name}',
+                str(len(owned)), status,
+            ]
+            self._fill(row, values, self.player_table)
+
+        self.board_table.setRowCount(len(board))
+        for row, space in enumerate(board):
+            owner = session.owner_for(space.index) if space.ownable else None
+            state = session.property_states.get(space.index)
+            if state is None:
+                development = '—'
+            elif state.mortgaged:
+                development = 'Mortgaged'
+            elif state.hotel:
+                development = 'Hotel'
+            elif state.houses:
+                development = f'{state.houses} house(s)'
+            else:
+                development = '—'
+            if owner is None:
+                rent = '—'
+            elif space.space_type is SpaceType.UTILITY:
+                rent = 'Dice × 4/10'
+            else:
+                rent = f'${self.controller.engine.rent_due(space.index):,}'
+            values = [
+                str(space.index), space.name,
+                space.space_type.value.replace('_', ' ').title(),
+                owner.name if owner else 'Bank',
+                development, rent,
+            ]
+            self._fill(row, values, self.board_table)
+        if 0 <= selected_row < len(board):
+            self.board_table.setCurrentCell(selected_row, 0)
+
+        recent = list(reversed(session.transactions[-100:]))
+        self.ledger_table.setRowCount(len(recent))
+        for row, record in enumerate(recent):
+            self._fill(row, [
+                record.created_at.strftime('%Y-%m-%d %H:%M'),
+                record.kind.replace('_', ' ').title(),
+                f'${record.amount:,}',
+                record.description,
+            ], self.ledger_table)
+        self.setWindowTitle(f'{session.name} — MonopolPy Companion')
+
+    def _new_game(self) -> None:
+        """Collect new-session information and open the game dashboard."""
+        dialog = NewSessionDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            self.controller.new_session(
+                dialog.game_name, dialog.player_names, dialog.starting_cash
+            )
+        except (OSError, ValueError) as exc:
+            self._show_error('Could not start game', exc)
+            return
+        self.statusBar().showMessage('New game saved successfully.', 6000)
+
+    def _open_game(self) -> None:
+        """Let the user choose a JSON game file."""
+        start = str(self.controller.repository.directory)
+        path, _filter = QFileDialog.getOpenFileName(
+            self, 'Open Monopoly game', start, 'Monopoly JSON (*.json)'
+        )
+        if not path:
+            return
+        try:
+            self.controller.open_session(path)
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            self._show_error('Could not open game', exc)
+            return
+        self.statusBar().showMessage(f'Loaded {Path(path).name}', 6000)
+
+    def _save(self) -> None:
+        """Persist the active session on demand."""
+        try:
+            self.controller.save()
+        except (OSError, ValueError) as exc:
+            self._show_error('Save failed', exc)
+            return
+        self.statusBar().showMessage('Game saved successfully.', 6000)
+
+    def _perform(self, action: str, *args: Any, **kwargs: Any) -> None:
+        """Route one UI action through the controller and show rule errors."""
+        try:
+            self.controller.perform(action, *args, **kwargs)
+        except SessionSaveError as exc:
+            QMessageBox.warning(self, 'Autosave failed',
+                                f'{exc}\nThe action was applied but has not been saved.')
+            return
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            self._show_error('Cannot complete game action', exc)
+            return
+        self.statusBar().showMessage(
+            f'{action.replace("_", " ").capitalize()} completed and saved.', 6000
+        )
+
+    def _selected_player_id(self) -> str:
+        """Get the selected player identity or raise a user-facing error."""
+        player_id = self.player_picker.currentData()
+        if player_id is None:
+            raise ValueError('Select a player first.')
+        return player_id
+
+    def _selected_board_index(self) -> int:
+        """Get the active board row, rejecting absent selections."""
+        row = self.board_table.currentRow()
+        if row < 0:
+            raise ValueError('Select a board space first.')
+        return row
+
+    def _player_action(self, action: str) -> None:
+        """Run a player-only operation for the selected player."""
+        try:
+            player_id = self._selected_player_id()
+        except ValueError as exc:
+            self._show_error('Select player', exc)
+            return
+        self._perform(action, player_id)
+
+    def _board_action(self, action: str) -> None:
+        """Run an owned-deed action for selected player and board square."""
+        try:
+            player_id = self._selected_player_id()
+            space_index = self._selected_board_index()
+        except ValueError as exc:
+            self._show_error('Select player and space', exc)
+            return
+        self._perform(action, player_id, space_index)
+
+    def _collect_rent(self) -> None:
+        """Collect rent on a selected deed from the current active player."""
+        try:
+            player_id = self._selected_player_id()
+            space_index = self._selected_board_index()
+        except ValueError as exc:
+            self._show_error('Select player and space', exc)
+            return
+        space = self.controller.session.board[space_index]
+        if space.space_type is SpaceType.UTILITY:
+            # Use the explicit dice controls; no rolls are invented.
+            total = self.die_one.value() + self.die_two.value()
+            self._perform('collect_rent', player_id, space_index, dice_total=total)
+        else:
+            self._perform('collect_rent', player_id, space_index)
+
+    def _move_by_dice(self) -> None:
+        """Apply exactly the dice values entered by the human players."""
+        try:
+            player_id = self._selected_player_id()
+        except ValueError as exc:
+            self._show_error('Select player', exc)
+            return
+        self._perform(
+            'move_by_dice', player_id, self.die_one.value(), self.die_two.value()
+        )
+
+    def _transfer(self) -> None:
+        """Open bank/player transfer dialog and submit it to GameEngine."""
+        if self.controller.session is None:
+            return
+        dialog = TransferDialog(self.controller.session, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._perform('transfer', **dialog.transfer_args)
+
+    def _release_from_jail(self) -> None:
+        """Choose the permitted way to release a selected player."""
+        try:
+            player_id = self._selected_player_id()
+        except ValueError as exc:
+            self._show_error('Select player', exc)
+            return
+        choices = ['Pay $50 fine', 'Use Get Out of Jail Free card',
+                   'Rolled doubles (verified on physical dice)']
+        choice, accepted = QInputDialog.getItem(
+            self, 'Release from jail', 'Method:', choices, 0, False
+        )
+        if not accepted:
+            return
+        method = {'Pay $50 fine': 'fine',
+                  'Use Get Out of Jail Free card': 'card',
+                  'Rolled doubles (verified on physical dice)': 'doubles'}[choice]
+        self._perform('release_from_jail', player_id, method=method)
+
+    def _toggle_theme(self) -> None:
+        """Switch the desktop palette without affecting game state."""
+        self._dark_theme = not self._dark_theme
+        application = QApplication.instance()
+        if application is not None:
+            application.setStyleSheet(stylesheet(self._dark_theme))
+        self.theme_action.setText('Light theme' if self._dark_theme else 'Dark theme')
+
+    def _show_error(self, title: str, error: Exception) -> None:
+        """Display friendly errors instead of exposing a traceback in the GUI."""
+        QMessageBox.warning(self, title, str(error))
