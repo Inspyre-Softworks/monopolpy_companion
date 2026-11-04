@@ -50,6 +50,8 @@ class Player:
     jail_turns: int = 0
     get_out_of_jail_cards: int = 0
     bankrupt: bool = False
+    pin_salt: str = ""
+    pin_hash: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -62,6 +64,8 @@ class Player:
             "jail_turns": self.jail_turns,
             "get_out_of_jail_cards": self.get_out_of_jail_cards,
             "bankrupt": self.bankrupt,
+            "pin_salt": self.pin_salt,
+            "pin_hash": self.pin_hash,
         }
 
     @classmethod
@@ -100,6 +104,7 @@ class Transaction:
     created_at: datetime = field(default_factory=utc_now)
     from_player_id: Optional[str] = None
     to_player_id: Optional[str] = None
+    space_index: Optional[int] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -110,6 +115,7 @@ class Transaction:
             "created_at": self.created_at.isoformat(),
             "from_player_id": self.from_player_id,
             "to_player_id": self.to_player_id,
+            "space_index": self.space_index,
         }
 
     @classmethod
@@ -150,9 +156,14 @@ class GameSession:
     property_states: dict[int, PropertyState] = field(default_factory=dict)
     transactions: list[Transaction] = field(default_factory=list)
     notes: str = ""
+    show_landing_prompts: bool = True
+    turn_counts: dict[str, int] = field(default_factory=dict)
+    dice_rolls: list[dict[str, Any]] = field(default_factory=list)
     save_path: Optional[str] = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        if not self.turn_counts and self.players:
+            self.turn_counts[self.players[self.current_turn_index % len(self.players)].player_id] = 1
         if not self.property_states:
             for space in self.board:
                 if space.ownable:
@@ -178,11 +189,13 @@ class GameSession:
     def add_player(self, name: str, token: str = "") -> Player:
         player = Player(name=name.strip(), cash=self.rules.starting_cash, token=token.strip())
         self.players.append(player)
+        self.turn_counts[player.player_id] = 0
         self.touch()
         return player
 
     def remove_player(self, player_id: str) -> None:
         self.players = [player for player in self.players if player.player_id != player_id]
+        self.turn_counts.pop(player_id, None)
         if self.players:
             self.current_turn_index %= len(self.players)
         else:
@@ -229,6 +242,7 @@ class GameSession:
         description: str,
         from_player_id: Optional[str] = None,
         to_player_id: Optional[str] = None,
+        space_index: Optional[int] = None,
     ) -> Transaction:
         transaction = Transaction(
             kind=kind,
@@ -236,6 +250,7 @@ class GameSession:
             description=description,
             from_player_id=from_player_id,
             to_player_id=to_player_id,
+            space_index=space_index,
         )
         self.transactions.append(transaction)
         self.touch()
@@ -285,6 +300,7 @@ class GameSession:
             amount=space.price,
             description=f"{player.name} bought {space.name}",
             from_player_id=player.player_id,
+            space_index=space_index,
         )
         self.touch()
         return state
@@ -317,6 +333,9 @@ class GameSession:
             },
             "transactions": [transaction.to_dict() for transaction in self.transactions],
             "notes": self.notes,
+            "show_landing_prompts": self.show_landing_prompts,
+            "turn_counts": self.turn_counts,
+            "dice_rolls": self.dice_rolls,
         }
 
     @classmethod
@@ -330,6 +349,9 @@ class GameSession:
             int(space_index): PropertyState.from_dict(state)
             for space_index, state in payload.get("property_states", {}).items()
         }
+        payload.setdefault("show_landing_prompts", True)
+        payload.setdefault("turn_counts", {})
+        payload.setdefault("dice_rolls", [])
         payload["transactions"] = [
             Transaction.from_dict(transaction)
             for transaction in payload.get("transactions", [])

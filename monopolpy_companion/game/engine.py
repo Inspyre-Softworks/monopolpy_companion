@@ -107,6 +107,8 @@ class GameEngine:
         from_player_id: Optional[str] = None,
         to_player_id: Optional[str] = None,
         description: str = 'Cash transfer',
+        kind: str = 'cash_transfer',
+        space_index: Optional[int] = None,
     ) -> Transaction:
         """Make an audited cash transfer involving players and/or the bank.
 
@@ -137,6 +139,8 @@ class GameEngine:
         record = self.session.transfer_cash(
             amount, description, from_player_id=from_player_id, to_player_id=to_player_id
         )
+        record.kind = kind
+        record.space_index = space_index
         self._emit('cash_transferred', transaction_id=record.transaction_id,
                    amount=amount, from_player_id=from_player_id, to_player_id=to_player_id)
         return record
@@ -194,7 +198,20 @@ class GameEngine:
         for die in (first_die, second_die):
             if isinstance(die, bool) or not isinstance(die, int) or not 1 <= die <= 6:
                 raise ValueError('Each die must be an integer between 1 and 6')
-        return self.move(player_id, first_die + second_die)
+        result = self.move(player_id, first_die + second_die)
+        self.session.dice_rolls.append({
+            'player_id': player_id, 'die_one': first_die,
+            'die_two': second_die, 'total': first_die + second_die,
+        })
+        self.session.touch()
+        self._emit('dice_rolled', player_id=player_id,
+                   die_one=first_die, die_two=second_die)
+        return result
+
+    def simulate_dice(self) -> tuple[int, int]:
+        '''Generate two unbiased six-sided dice for use in a later move.'''
+        from secrets import randbelow
+        return randbelow(6) + 1, randbelow(6) + 1
 
     def advance_turn(self) -> Optional[Player]:
         """Advance to the next solvent player, skipping bankrupt players."""
@@ -205,6 +222,7 @@ class GameEngine:
             index = (self.session.current_turn_index + offset) % len(players)
             if not players[index].bankrupt:
                 self.session.current_turn_index = index
+                self.session.turn_counts[players[index].player_id] = (\n                    self.session.turn_counts.get(players[index].player_id, 0) + 1\n                )
                 self.session.touch()
                 self._emit('turn_advanced', player_id=players[index].player_id)
                 return players[index]
@@ -282,7 +300,8 @@ class GameEngine:
             return None
         return self.transfer(amount, from_player_id=tenant_id,
                              to_player_id=owner.player_id,
-                             description=f'Rent: {space.name}')
+                             description=f'Rent: {space.name}', kind='rent',
+                             space_index=space_index)
 
     def mortgage(self, player_id: str, space_index: int) -> PropertyState:
         """Mortgage an owned deed once its color group has no buildings."""
@@ -294,7 +313,8 @@ class GameEngine:
         ):
             raise ValueError('Sell all buildings in this group before mortgaging')
         self.transfer(space.mortgage_value, to_player_id=player_id,
-                      description=f'Mortgage: {space.name}')
+                      description=f'Mortgage: {space.name}', kind='mortgage',
+                      space_index=space_index)
         state.mortgaged = True
         self.session.touch()
         self._emit('property_mortgaged', player_id=player_id, space_index=space_index)
@@ -307,7 +327,8 @@ class GameEngine:
             raise ValueError('Property is not mortgaged')
         amount = space.mortgage_value + (space.mortgage_value + 9) // 10
         self.transfer(amount, from_player_id=player_id,
-                      description=f'Unmortgage: {space.name}')
+                      description=f'Unmortgage: {space.name}', kind='unmortgage',
+                      space_index=space_index)
         state.mortgaged = False
         self.session.touch()
         self._emit('property_unmortgaged', player_id=player_id,
@@ -340,7 +361,8 @@ class GameEngine:
         if self.session.get_player(player_id).cash < space.house_cost:
             raise ValueError('Insufficient cash to buy a building')
         self.transfer(space.house_cost, from_player_id=player_id,
-                      description=f'Building purchase: {space.name}')
+                      description=f'Building purchase: {space.name}', kind='building_purchase',
+                      space_index=space_index)
         if level == 4:
             state.houses = 0
             state.hotel = True
@@ -370,7 +392,8 @@ class GameEngine:
         else:
             state.houses -= 1
         self.transfer(space.house_cost // 2, to_player_id=player_id,
-                      description=f'Building sale: {space.name}')
+                      description=f'Building sale: {space.name}', kind='building_sale',
+                      space_index=space_index)
         self.session.touch()
         self._emit('building_sold', player_id=player_id,
                    space_index=space_index, level=level - 1)
@@ -413,6 +436,29 @@ class GameEngine:
         self._emit('player_released', player_id=player_id, method=method)
         return player
 
+
+    def mortgage_quote(self, player_id: str, space_indices: list[int],
+                       operation: str = 'unmortgage'):
+        '''Return a validated quote for several owned properties, without mutation.'''
+        from .finance import MortgageCalculator
+        return MortgageCalculator(self.session).quote(player_id, space_indices, operation)
+
+    def mortgage_many(self, player_id: str, space_indices: list[int]) -> int:
+        '''Mortgage several deeds after validating the complete selection.'''
+        quote = self.mortgage_quote(player_id, space_indices, 'mortgage')
+        for index in quote.space_indices:
+            self.mortgage(player_id, index)
+        return quote.total
+
+    def unmortgage_many(self, player_id: str, space_indices: list[int]) -> int:
+        '''Pay off several mortgages with preflight affordability checks.'''
+        quote = self.mortgage_quote(player_id, space_indices, 'unmortgage')
+        if self.session.get_player(player_id).cash < quote.total:
+            raise ValueError('Insufficient cash to unmortgage selected deeds')
+        for index in quote.space_indices:
+            self.unmortgage(player_id, index)
+        return quote.total
+
     def pay_tax(self, player_id: str, space_index: int) -> Transaction:
         """Pay Income Tax ($200) or Luxury Tax ($100) to the bank."""
         space = self._space(space_index)
@@ -420,4 +466,5 @@ class GameEngine:
         if space.space_type is not SpaceType.TAX or amount is None:
             raise ValueError('No supported tax at this board position')
         return self.transfer(amount, from_player_id=player_id,
-                             description=f'Tax: {space.name}')
+                             description=f'Tax: {space.name}', kind='tax',
+                             space_index=space_index)

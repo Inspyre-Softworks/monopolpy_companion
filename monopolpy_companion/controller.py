@@ -40,6 +40,7 @@ class SessionController:
         'transfer', 'purchase', 'move', 'move_by_dice', 'advance_turn',
         'collect_rent', 'mortgage', 'unmortgage', 'buy_building',
         'sell_building', 'send_to_jail', 'release_from_jail', 'pay_tax',
+        'mortgage_many', 'unmortgage_many',
     })
 
     def __init__(
@@ -58,6 +59,7 @@ class SessionController:
         self._listeners: list[Observer] = []
         self._pending: list[GameEvent] = []
         self._unsubscribe_engine: Callable[[], None] | None = None
+        self._unlocked_ids: set[str] = set()
 
     def subscribe(self, handler: Observer) -> Callable[[], None]:
         """Subscribe to successful actions or session replacement."""
@@ -90,6 +92,7 @@ class SessionController:
         if self._unsubscribe_engine is not None:
             self._unsubscribe_engine()
         self.session = session
+        self._unlocked_ids.clear()
         self.engine = GameEngine(session, logger=self.logger)
         self._unsubscribe_engine = self.engine.subscribe(self._pending.append)
         self._pending.clear()
@@ -114,6 +117,55 @@ class SessionController:
             raise ValueError('No active session')
         self.repository.save(self.session, self.session.save_path)
 
+    def unlock_player(self, player_id: str, pin: str) -> bool:
+        '''Unlock a player account for this app session after verifying its PIN.'''
+        from .game.security import PlayerAccount
+        if self.session is None:
+            raise ValueError('No active session')
+        account = PlayerAccount(self.session.get_player(player_id))
+        if account.verify_pin(pin):
+            self._unlocked_ids.add(player_id)
+            return True
+        return False
+
+    def lock_player(self, player_id: str) -> None:
+        '''Forget a player's in-memory PIN authorization.'''
+        self._unlocked_ids.discard(player_id)
+
+    def set_player_pin(self, player_id: str, pin: str, old_pin: str | None = None) -> None:
+        '''Set or clear a PIN after verifying the old one when present.'''
+        from .game.security import PlayerAccount
+        if self.session is None:
+            raise ValueError('No active session')
+        account = PlayerAccount(self.session.get_player(player_id))
+        if account.is_locked and player_id not in self._unlocked_ids:
+            if old_pin is None or not account.verify_pin(old_pin):
+                raise PermissionError('Current PIN required')
+        if pin:
+            account.set_pin(pin)
+        else:
+            account.clear_pin()
+        self._unlocked_ids.discard(player_id)
+        self.save()
+        self._notify(GameEvent('account_security_changed', {'player_id': player_id}))
+
+    def is_player_unlocked(self, player_id: str) -> bool:
+        '''Whether a player can perform protected game actions now.'''
+        from .game.security import PlayerAccount
+        if self.session is None:
+            return False
+        player = self.session.get_player(player_id)
+        return not PlayerAccount(player).is_locked or player_id in self._unlocked_ids
+
+    def set_landing_prompts(self, enabled: bool) -> None:
+        '''Persist whether the GUI should show automatic landing dialogs.'''
+        if self.session is None:
+            raise ValueError('No active session')
+        self.session.show_landing_prompts = bool(enabled)
+        self.session.touch()
+        self.save()
+        self._notify(GameEvent('settings_changed', {'show_landing_prompts': enabled}))
+
     def perform(self, action: str, *args: Any, **kwargs: Any) -> Any:
         """Execute a validated game command and autosave its completed result.
 
@@ -133,6 +185,13 @@ class SessionController:
             raise ValueError('No active session')
         if action not in self.ACTIONS:
             raise ValueError(f'Unsupported game action: {action}')
+        secured = None
+        if action == 'transfer':
+            secured = kwargs.get('from_player_id')
+        elif action not in {'advance_turn'}:
+            secured = args[0] if args else kwargs.get('player_id')
+        if secured is not None and not self.is_player_unlocked(secured):
+            raise PermissionError('Player account is PIN locked')
         self._pending.clear()
         try:
             result = getattr(self.engine, action)(*args, **kwargs)
