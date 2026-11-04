@@ -12,7 +12,7 @@ Install the headless library: `python -m pip install .`
 Install the experimental GUI: `python -m pip install '.[gui]'`
 
 ```python
-from monopolpy_companion.game import GameEngine, SessionRepository, create_standard_session
+from monopolpy_companion import GameEngine, SessionRepository, create_standard_session
 
 session = create_standard_session('Game Night', ['Avery', 'Blake'])
 engine = GameEngine(session)
