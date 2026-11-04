@@ -436,9 +436,8 @@ class MainWindow(QMainWindow):
                 cell.setBackground(QBrush(shade))
                 cell.setForeground(QBrush(QColor('#ffffff' if shade.lightness() < 155 else '#151c1a')))
         focus_row = (
-            self._focused_property_index
-            if self._focused_property_index is not None
-            else selected_row
+            selected_row if 0 <= selected_row < len(board)
+            else self._focused_property_index
         )
         if focus_row is not None and 0 <= focus_row < len(board):
             self.board_table.setCurrentCell(focus_row, 0)
