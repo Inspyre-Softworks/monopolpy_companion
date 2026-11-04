@@ -524,22 +524,31 @@ class MainWindow(QMainWindow):
             self._perform('collect_rent', player_id, space_index)
 
 
-    def _roll_dice(self) -> None:
-        """Simulate fair dice, previewing the result without moving a token."""
+    def _roll_dice(self) -> bool:
+        """Roll unbiased dice through the controller and save the statistics."""
         if self.controller.engine is None:
-            return
-        first, second = self.controller.engine.simulate_dice()
+            return False
+        try:
+            player_id = self._selected_player_id()
+        except ValueError as exc:
+            self._show_error('Select player', exc)
+            return False
+        result = self._perform('simulate_dice', player_id)
+        if result is None:
+            return False
+        first, second = result
         self.die_one.setValue(first)
         self.die_two.setValue(second)
         self.dice_result.setText(
             f'Rolled {first} + {second} = {first + second}'
             + (' — DOUBLES!' if first == second else '')
         )
+        return True
 
     def _roll_and_move(self) -> None:
-        """Roll physical-game dice digitally, then commit the move."""
-        self._roll_dice()
-        self._move_by_dice()
+        """Simulate one roll and apply exactly that result to movement."""
+        if self._roll_dice():
+            self._move_by_dice()
 
     def _move_by_dice(self) -> None:
         """Move selected token and highlight the landed-on board square."""

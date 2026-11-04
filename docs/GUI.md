@@ -32,6 +32,15 @@ The GUI is not required for `from monopolpy_companion import GameEngine`.
 
 ## Workflows
 
+See [Player accounts and statistics](ACCOUNTS_AND_STATISTICS.md) for
+PIN controls, the dice simulator, financial reports and mortgage planning.
+
+The opening screen presents only **New Game** and **Open Game**; the dashboard
+appears after a session is selected. The board uses familiar title-card red,
+board green, ivory and property color groups. The app icon is generated from
+Qt shapes and does not bundle fonts or proprietary artwork.
+
+
 1. Use **New game** to enter the session name and at least two players.
    The new session saves immediately.
 2. Select the acting player in the left-hand selector.
@@ -48,7 +57,11 @@ The GUI is not required for `from monopolpy_companion import GameEngine`.
    The headless GameEngine rejects invalid purchases.
 8. **Next turn** advances through active players. **Save** saves on demand;
    **Open** restores an existing JSON session.
-9. Switch between dark and light colors with the named theme button.
+9. Open **Player account** for a PIN, statistics or multi-deed mortgage quote.
+10. Use **Roll dice** to simulate a roll, or **Roll + move** to roll and move.
+    The board selects the landed space. **Landing alerts** controls whether
+    purchase/rent dialogs appear and is saved per session.
+11. Switch between dark and light colors with the named theme button.
 
 All important actions use visible text labels and tooltips; there are no
 unlabeled icon-only controls. Screen-reader descriptions are set on custom

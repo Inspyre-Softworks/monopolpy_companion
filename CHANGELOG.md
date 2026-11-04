@@ -8,6 +8,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- PIN-lockable player accounts using salted one-way hashes and session-scoped unlocks.
+- Persisted gameplay and financial reports, rent breakdowns by player and deed,
+  and virtual dice rolls with per-player statistics.
+- Per-player, multi-property mortgage and unmortgage calculator with total quotes.
+- Monopoly-inspired light/dark styling, a generated icon, and simpler game startup.
+- Dice-landing board highlighting with optional purchase/rent prompts.
 - A Qt/PySide6 desktop dashboard with session setup, save/load, banker,
   dice movement, board/deed overview, rent, mortgages, building controls,
   jail actions, and transaction history.
@@ -23,6 +29,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Automated library unit-test workflow across Python 3.10, 3.12 and 3.13.
 
 ### Changed
+- Updated packaging to version 1.0.dev7 and registered the Poetry CLI script.
 - Bumped both package metadata files to 1.0.dev6.
 - Made the Qt dashboard the --gui entry point and retained the original shell
   under --legacy-gui with its own optional dependencies.

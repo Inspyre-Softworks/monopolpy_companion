@@ -40,7 +40,7 @@ class SessionController:
         'transfer', 'purchase', 'move', 'move_by_dice', 'advance_turn',
         'collect_rent', 'mortgage', 'unmortgage', 'buy_building',
         'sell_building', 'send_to_jail', 'release_from_jail', 'pay_tax',
-        'mortgage_many', 'unmortgage_many',
+        'mortgage_many', 'unmortgage_many', 'simulate_dice',
     })
 
     def __init__(

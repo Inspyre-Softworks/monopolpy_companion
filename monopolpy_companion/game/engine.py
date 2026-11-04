@@ -200,24 +200,52 @@ class GameEngine:
         return result
 
     def move_by_dice(self, player_id: str, first_die: int, second_die: int) -> MoveResult:
-        """Move using validated six-sided dice; caller handles doubles policy."""
+        """Record a played pair of dice and move the player once."""
         for die in (first_die, second_die):
             if isinstance(die, bool) or not isinstance(die, int) or not 1 <= die <= 6:
                 raise ValueError('Each die must be an integer between 1 and 6')
         result = self.move(player_id, first_die + second_die)
+        pending = next((
+            roll for roll in reversed(self.session.dice_rolls)
+            if roll.get('player_id') == player_id
+            and roll.get('source') == 'simulated'
+            and not roll.get('used_for_move')
+        ), None)
+        if pending is not None and (
+            pending.get('die_one'), pending.get('die_two')
+        ) == (first_die, second_die):
+            pending['used_for_move'] = True
+        else:
+            self.session.dice_rolls.append({
+                'player_id': player_id, 'die_one': first_die,
+                'die_two': second_die, 'total': first_die + second_die,
+                'source': 'manual', 'used_for_move': True,
+            })
+            self._emit('dice_rolled', player_id=player_id,
+                       die_one=first_die, die_two=second_die, source='manual')
+        self.session.touch()
+        return result
+
+    def simulate_dice(self, player_id: str) -> tuple[int, int]:
+        """Roll two unbiased dice and persist the player's simulated result.
+
+        The result can later be consumed by move_by_dice without double
+        counting the same roll. A simulated roll counts even if not used.
+        """
+        from secrets import randbelow
+        player = self.session.get_player(player_id)
+        if player.bankrupt:
+            raise ValueError('Bankrupt players cannot roll')
+        first, second = randbelow(6) + 1, randbelow(6) + 1
         self.session.dice_rolls.append({
-            'player_id': player_id, 'die_one': first_die,
-            'die_two': second_die, 'total': first_die + second_die,
+            'player_id': player_id, 'die_one': first,
+            'die_two': second, 'total': first + second,
+            'source': 'simulated', 'used_for_move': False,
         })
         self.session.touch()
         self._emit('dice_rolled', player_id=player_id,
-                   die_one=first_die, die_two=second_die)
-        return result
-
-    def simulate_dice(self) -> tuple[int, int]:
-        '''Generate two unbiased six-sided dice for use in a later move.'''
-        from secrets import randbelow
-        return randbelow(6) + 1, randbelow(6) + 1
+                   die_one=first, die_two=second, source='simulated')
+        return first, second
 
     def advance_turn(self) -> Optional[Player]:
         """Advance to the next solvent player, skipping bankrupt players."""

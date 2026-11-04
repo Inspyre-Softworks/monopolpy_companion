@@ -47,6 +47,23 @@ class QtGuiTests(unittest.TestCase):
         self.assertFalse(self.window.next_action.isEnabled())
         self.assertEqual(self.window.board_table.rowCount(), 0)
 
+    def test_welcome_and_game_visibility(self):
+        self.assertTrue(self.window.welcome_widget.isVisibleTo(self.window.centralWidget()))
+        self.controller.new_session('Welcome', ['Avery', 'Blake'])
+        self.assertFalse(self.window.welcome_widget.isVisibleTo(self.window.centralWidget()))
+
+    def test_rolled_simulation_updates_dice_and_stats(self):
+        from monopolpy_companion import StatisticsService
+        session = self.controller.new_session('Rolls', ['Avery', 'Blake'])
+        self.window._roll_dice()
+        self.assertEqual(
+            StatisticsService(session).for_player(session.players[0].player_id).gameplay.dice_rolls,
+            1,
+        )
+
+    def test_generated_icon_available(self):
+        self.assertFalse(self.window.windowIcon().isNull())
+
     def test_theme_toggle_changes_label(self):
         self.window._toggle_theme()
         self.assertEqual(self.window.theme_action.text(), 'Dark theme')
