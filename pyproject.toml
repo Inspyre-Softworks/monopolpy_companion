@@ -1,17 +1,26 @@
 [tool.poetry]
 name = "monopolpy_companion"
-version = "1.0.dev4"
-description = ""
+version = "1.0.dev7"
+description = "Electronic banker, game engine, and optional desktop GUI for physical Monopoly"
 authors = ["Taylor B. <43686206+tayjaybabee@users.noreply.github.com>"]
+readme = "README.md"
+packages = [{ include = "monopolpy_companion" }]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.11"
-inspy-logger = "2.1a14"
-PyYAML = "^6.0"
-"pysimplegui-4-foss" = "^4.60.4.1"
+python = ">=3.10,<4.0"
+inspy-logger = ">=3.2.4,<4.0"
+PySide6 = { version = ">=6.8,<7", optional = true }
+PyYAML = { version = "^6.0", optional = true }
+"pysimplegui-4-foss" = { version = "^4.60.4.1", optional = true }
+colorlog = { version = "^6.10.1", optional = true }
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.scripts]
+monopolpy-companion = "monopolpy_companion.cli:main"
+
+[tool.poetry.extras]
+gui = ["PySide6"]
+legacy-gui = ["PyYAML", "pysimplegui-4-foss", "colorlog"]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

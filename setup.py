@@ -1,22 +1,29 @@
-import setuptools
+"""Setuptools compatibility metadata for the optional Qt desktop interface."""
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
+from setuptools import find_packages, setup
 
-setuptools.setup(
+with open("README.md", "r", encoding="utf-8") as handle:
+    long_description = handle.read()
+
+setup(
     name="monopolpy_companion",
-    version="1.0.dev4",
-    scripts=["monopolpy_companion.py"],
+    version="1.0.dev7",
+    description="Electronic banker and GUI for physical Monopoly games",
     author="Taylor-Jayde Blackstone",
     author_email="t.blackstone@inspyre.tech",
-    description="The ultimate app that manages your Monopoly Board Game sessions for you",
+    url="https://github.com/Inspyre-Softworks/monopolpy_companion",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/tayjaybabee/monopolpy_companion",
-    packages=setuptools.find_packages(),
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-    ],
+    packages=find_packages(),
+    python_requires=">=3.10",
+    install_requires=["inspy-logger>=3.2.4,<4.0"],
+    extras_require={
+        "gui": ["PySide6>=6.8,<7"],
+        "legacy-gui": [
+            "PyYAML>=6,<7", "pysimplegui-4-foss>=4.60.4.1,<5",
+            "colorlog>=6.10.1,<7",
+        ],
+    },
+    entry_points={"console_scripts": ["monopolpy-companion=monopolpy_companion.cli:main"]},
+    scripts=["monopolpy_companion.py"],
 )
