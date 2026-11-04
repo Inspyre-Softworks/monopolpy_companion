@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QColor, QBrush
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDialog, QFileDialog, QGridLayout,
+    QApplication, QComboBox, QDialog, QFileDialog, QGridLayout, QLineEdit,
     QGroupBox, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
     QSpinBox, QSplitter, QTableWidgetItem, QToolBar, QVBoxLayout, QWidget,
 )
@@ -21,6 +21,8 @@ from monopolpy_companion.controller import SessionController, SessionSaveError
 from monopolpy_companion.game import GameSession, SpaceType
 
 from .dialogs import NewSessionDialog, TransferDialog
+from .account_dialog import PlayerAccountDialog
+from .branding import BOARD_GROUP_COLORS, make_app_icon
 from .theme import stylesheet
 from .widgets import HelpButton, ReadOnlyTable
 
@@ -45,6 +47,7 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         """Create accessible, reusable views and action controls."""
         self.setWindowTitle('MonopolPy Companion — Game Dashboard')
+        self.setWindowIcon(make_app_icon())
         self.resize(1180, 790)
         self.setMinimumSize(920, 590)
 
@@ -69,6 +72,13 @@ class MainWindow(QMainWindow):
             lambda: self._perform('advance_turn'),
         )
         toolbar.addSeparator()
+        self.landing_action = self._toolbar_action(
+            toolbar, 'Landing alerts', 'Ask to buy or pay rent after dice movement.',
+            self._toggle_landing_prompts,
+        )
+        self.landing_action.setCheckable(True)
+        self.landing_action.setChecked(True)
+        toolbar.addSeparator()
         self.theme_action = self._toolbar_action(
             toolbar, 'Light theme', 'Switch between light and dark colors',
             self._toggle_theme,
@@ -87,6 +97,27 @@ class MainWindow(QMainWindow):
         self.subtitle.setObjectName('subTitle')
         root.addWidget(self.subtitle)
 
+        self.welcome_widget = QGroupBox('Start a game')
+        welcome_layout = QVBoxLayout(self.welcome_widget)
+        greeting = QLabel(
+            'MONOPOLPY GAME NIGHT\n'
+            'Start a new session or open an existing save.'
+        )
+        greeting.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        welcome_layout.addWidget(greeting)
+        start_buttons = QHBoxLayout()
+        start_buttons.addStretch()
+        start_new = HelpButton('New Game', 'Create players and initial cash.')
+        start_open = HelpButton('Open Game', 'Resume a saved board game.')
+        start_new.clicked.connect(self._new_game)
+        start_open.clicked.connect(self._open_game)
+        start_buttons.addWidget(start_new)
+        start_buttons.addWidget(start_open)
+        start_buttons.addStretch()
+        welcome_layout.addLayout(start_buttons)
+        welcome_layout.addStretch()
+        root.addWidget(self.welcome_widget, stretch=1)
+
         column_splitter = QSplitter(Qt.Orientation.Horizontal)
         column_splitter.addWidget(self._build_player_group())
         column_splitter.addWidget(self._build_board_group())
@@ -98,7 +129,8 @@ class MainWindow(QMainWindow):
         vertical_splitter.addWidget(self._build_ledger_group())
         vertical_splitter.setStretchFactor(0, 5)
         vertical_splitter.setStretchFactor(1, 2)
-        root.addWidget(vertical_splitter, stretch=1)
+        self.dashboard_widget = vertical_splitter
+        root.addWidget(self.dashboard_widget, stretch=1)
 
         self.statusBar().showMessage(
             'New game: create players. Open: resume an existing session.'
@@ -154,6 +186,9 @@ class MainWindow(QMainWindow):
             dice_row.addWidget(die)
         dice_row.addStretch()
         layout.addLayout(dice_row)
+        self.dice_result = QLabel('Enter dice values or use the simulator.')
+        self.dice_result.setToolTip('A simulated roll is counted once you move by those dice.')
+        layout.addWidget(self.dice_result)
 
         buttons = QGridLayout()
         self._button(
@@ -171,6 +206,18 @@ class MainWindow(QMainWindow):
         self._button(
             'Release from jail', 'Pay a $50 fine, use a card, or record verified doubles.',
             self._release_from_jail, buttons, 1, 1,
+        )
+        self._button(
+            'Roll dice', 'Simulate unbiased six-sided dice without moving yet.',
+            self._roll_dice, buttons, 2, 0,
+        )
+        self._button(
+            'Roll + move', 'Simulate dice, then move the selected token.',
+            self._roll_and_move, buttons, 2, 1,
+        )
+        self._button(
+            'Player account', 'Show PIN controls, gameplay stats, finances and mortgages.',
+            self._open_account, buttons, 3, 0,
         )
         layout.addLayout(buttons)
         return group
@@ -242,6 +289,12 @@ class MainWindow(QMainWindow):
         has_game = session is not None
         self.save_action.setEnabled(has_game)
         self.next_action.setEnabled(has_game)
+        self.landing_action.setEnabled(has_game)
+        self.landing_action.setChecked(
+            session.show_landing_prompts if session is not None else True
+        )
+        self.welcome_widget.setVisible(not has_game)
+        self.dashboard_widget.setVisible(has_game)
         for button in self._action_buttons:
             button.setEnabled(has_game)
         self.player_picker.setEnabled(has_game)
@@ -317,6 +370,13 @@ class MainWindow(QMainWindow):
                 development, rent,
             ]
             self._fill(row, values, self.board_table)
+            if space.color_group in BOARD_GROUP_COLORS:
+                shade = QColor(BOARD_GROUP_COLORS[space.color_group])
+                # Use a readable badge-like colored name cell, not a tinted
+                # entire row that obscures the selected/active highlight.
+                cell = self.board_table.item(row, 1)
+                cell.setBackground(QBrush(shade))
+                cell.setForeground(QBrush(QColor('#ffffff' if shade.lightness() < 155 else '#151c1a')))
         if 0 <= selected_row < len(board):
             self.board_table.setCurrentCell(selected_row, 0)
 
@@ -369,20 +429,50 @@ class MainWindow(QMainWindow):
             return
         self.statusBar().showMessage('Game saved successfully.', 6000)
 
-    def _perform(self, action: str, *args: Any, **kwargs: Any) -> None:
-        """Route one UI action through the controller and show rule errors."""
-        try:
-            self.controller.perform(action, *args, **kwargs)
-        except SessionSaveError as exc:
-            QMessageBox.warning(self, 'Autosave failed',
-                                f'{exc}\nThe action was applied but has not been saved.')
-            return
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            self._show_error('Cannot complete game action', exc)
-            return
-        self.statusBar().showMessage(
-            f'{action.replace("_", " ").capitalize()} completed and saved.', 6000
+    def _perform(self, action: str, *args: Any, **kwargs: Any) -> Any:
+        """Execute one game command, prompting for a protected payer PIN."""
+        for attempt in range(2):
+            try:
+                result = self.controller.perform(action, *args, **kwargs)
+                self.statusBar().showMessage(
+                    f'{action.replace("_", " ").capitalize()} completed and saved.', 6000
+                )
+                return result
+            except PermissionError:
+                if attempt > 0:
+                    break
+                payer = kwargs.get('from_player_id') if action == 'transfer' else (
+                    args[0] if args else kwargs.get('player_id')
+                )
+                if not payer or not self._unlock_player(payer):
+                    return None
+            except SessionSaveError as exc:
+                QMessageBox.warning(
+                    self, 'Autosave failed',
+                    f'{exc}\nThe action was applied but has not been saved.',
+                )
+                return None
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                self._show_error('Cannot complete game action', exc)
+                return None
+        self._show_error('PIN required', PermissionError('Player account is locked'))
+        return None
+
+    def _unlock_player(self, player_id: str) -> bool:
+        """Unlock one account using a masked PIN prompt."""
+        if self.controller.is_player_unlocked(player_id):
+            return True
+        player = self.controller.session.get_player(player_id)
+        pin, accepted = QInputDialog.getText(
+            self, f'{player.name} account', 'Enter account PIN:',
+            QLineEdit.EchoMode.Password,
         )
+        if not accepted:
+            return False
+        if not self.controller.unlock_player(player_id, pin):
+            QMessageBox.warning(self, 'Incorrect PIN', 'That PIN was not accepted.')
+            return False
+        return True
 
     def _selected_player_id(self) -> str:
         """Get the selected player identity or raise a user-facing error."""
@@ -433,16 +523,91 @@ class MainWindow(QMainWindow):
         else:
             self._perform('collect_rent', player_id, space_index)
 
+
+    def _roll_dice(self) -> None:
+        """Simulate fair dice, previewing the result without moving a token."""
+        if self.controller.engine is None:
+            return
+        first, second = self.controller.engine.simulate_dice()
+        self.die_one.setValue(first)
+        self.die_two.setValue(second)
+        self.dice_result.setText(
+            f'Rolled {first} + {second} = {first + second}'
+            + (' — DOUBLES!' if first == second else '')
+        )
+
+    def _roll_and_move(self) -> None:
+        """Roll physical-game dice digitally, then commit the move."""
+        self._roll_dice()
+        self._move_by_dice()
+
     def _move_by_dice(self) -> None:
-        """Apply exactly the dice values entered by the human players."""
+        """Move selected token and highlight the landed-on board square."""
         try:
             player_id = self._selected_player_id()
         except ValueError as exc:
             self._show_error('Select player', exc)
             return
-        self._perform(
+        result = self._perform(
             'move_by_dice', player_id, self.die_one.value(), self.die_two.value()
         )
+        if result is not None:
+            self._handle_landing(player_id, result)
+
+    def _handle_landing(self, player_id: str, result) -> None:
+        """Highlight the landing and optionally offer purchase/rent resolution."""
+        space = result.landed_on
+        self.board_table.selectRow(space.index)
+        item = self.board_table.item(space.index, 1)
+        if item is not None:
+            self.board_table.scrollToItem(item)
+        self.statusBar().showMessage(f'Landed on {space.name}', 9000)
+        if not self.controller.session.show_landing_prompts or not space.ownable:
+            return
+        owner = self.controller.session.owner_for(space.index)
+        if owner is None:
+            choice = QMessageBox.question(
+                self, 'Unowned property',
+                f'{space.name} is unowned. Buy it from the bank for ${space.price:,}?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if choice == QMessageBox.StandardButton.Yes:
+                self._perform('purchase', player_id, space.index)
+        elif owner.player_id != player_id:
+            dice_total = self.die_one.value() + self.die_two.value()
+            options = {'dice_total': dice_total} if space.space_type is SpaceType.UTILITY else {}
+            rent = self.controller.engine.rent_due(space.index, **options)
+            if rent:
+                choice = QMessageBox.question(
+                    self, 'Rent due',
+                    f'{space.name} belongs to {owner.name}.\n'
+                    f'Rent due: ${rent:,}. Pay {owner.name} now?',
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if choice == QMessageBox.StandardButton.Yes:
+                    self._perform('collect_rent', player_id, space.index, **options)
+
+    def _open_account(self) -> None:
+        """Prompt for PIN if locked, then open the account statistics dialog."""
+        try:
+            player_id = self._selected_player_id()
+        except ValueError as exc:
+            self._show_error('Select player', exc)
+            return
+        if not self._unlock_player(player_id):
+            return
+        PlayerAccountDialog(self.controller, player_id, self).exec()
+        self.refresh()
+
+    def _toggle_landing_prompts(self, checked: bool = True) -> None:
+        """Save the optional landing popup setting in this game session."""
+        if self.controller.session is None:
+            return
+        try:
+            self.controller.set_landing_prompts(checked)
+        except OSError as exc:
+            self._show_error('Could not save setting', exc)
+        self.refresh()
 
     def _transfer(self) -> None:
         """Open bank/player transfer dialog and submit it to GameEngine."""

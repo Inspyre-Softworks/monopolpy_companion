@@ -2,6 +2,9 @@
 
 from .board import build_standard_board
 from .engine import GameEngine, MoveResult
+from .finance import MortgageCalculator, MortgageQuote
+from .security import PlayerAccount
+from .statistics import StatisticsService, GameplayStatistics, FinancialStatistics, PlayerReport
 from .events import GameEvent
 from .logging import get_game_logger
 from .models import (
@@ -12,6 +15,8 @@ from .repository import SessionRepository
 from .storage import SavedSessionInfo, list_saved_sessions, load_session, save_session
 
 __all__ = [
+    'MortgageCalculator', 'MortgageQuote', 'PlayerAccount',
+    'StatisticsService', 'GameplayStatistics', 'FinancialStatistics', 'PlayerReport',
     'GameEngine', 'GameEvent', 'GameRules', 'GameSession', 'MoveResult', 'Player',
     'PropertyState', 'SavedSessionInfo', 'SessionRepository', 'Space', 'SpaceType',
     'Transaction', 'build_standard_board', 'create_standard_session',

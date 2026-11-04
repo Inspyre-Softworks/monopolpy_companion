@@ -89,12 +89,18 @@ class TransferDialog(QDialog):
         self.amount_field.setValue(50)
         self.amount_field.setPrefix('$')
         self.amount_field.setToolTip('Whole-dollar amount to transfer.')
+        self.category = QComboBox()
+        self.category.addItem('Other payment / event', 'event')
+        self.category.addItem('Player deal', 'deal')
+        self.category.addItem('General transfer', 'cash_transfer')
+        self.category.setToolTip('Categorize this payment for player financial statistics.')
         self.description_field = QLineEdit('Manual transfer')
         self.description_field.setToolTip('Reason recorded in the game ledger.')
         form = QFormLayout()
         form.addRow('From:', self.sender)
         form.addRow('To:', self.receiver)
         form.addRow('Amount:', self.amount_field)
+        form.addRow('Category:', self.category)
         form.addRow('Reason:', self.description_field)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -114,6 +120,7 @@ class TransferDialog(QDialog):
             'from_player_id': self.sender.currentData(),
             'to_player_id': self.receiver.currentData(),
             'description': self.description_field.text().strip() or 'Manual transfer',
+            'kind': self.category.currentData(),
         }
 
     def _validate(self) -> None:

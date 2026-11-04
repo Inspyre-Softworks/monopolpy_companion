@@ -188,6 +188,12 @@ class GameEngine:
         if landing.space_type is SpaceType.GO_TO_JAIL:
             self.send_to_jail(player_id)
         result = MoveResult(player_id, crossed_go, landing, player.position)
+        self.session.movement_history.append({
+            'player_id': player_id, 'spaces': spaces,
+            'from_position': old, 'landed_on': destination,
+            'final_position': player.position, 'passed_go': crossed_go,
+        })
+        self.session.touch()
         self._emit('player_moved', player_id=player_id, from_position=old,
                    landed_on=destination, final_position=player.position,
                    passed_go=crossed_go)

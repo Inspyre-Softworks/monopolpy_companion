@@ -7,6 +7,13 @@ The canonical data models, engine and repository are also available from
 
 from .game import (
     GameEngine,
+    MortgageCalculator,
+    MortgageQuote,
+    PlayerAccount,
+    StatisticsService,
+    GameplayStatistics,
+    FinancialStatistics,
+    PlayerReport,
     GameEvent,
     GameRules,
     GameSession,
@@ -28,6 +35,13 @@ from .game import (
 
 __all__ = [
     'GameEngine',
+    'MortgageCalculator',
+    'MortgageQuote',
+    'PlayerAccount',
+    'StatisticsService',
+    'GameplayStatistics',
+    'FinancialStatistics',
+    'PlayerReport',
     'GameEvent',
     'GameRules',
     'GameSession',

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from monopolpy_companion.controller import SessionController
 from .main_window import MainWindow
+from .branding import make_app_icon
 from .theme import stylesheet
 
 
@@ -18,6 +19,7 @@ def run() -> int:
     if application is None:
         application = QApplication(sys.argv)
     application.setApplicationName('MonopolPy Companion')
+    application.setWindowIcon(make_app_icon())
     application.setOrganizationName('Inspyre Softworks')
     application.setStyleSheet(stylesheet(True))
     window = MainWindow(SessionController())

@@ -159,6 +159,7 @@ class GameSession:
     show_landing_prompts: bool = True
     turn_counts: dict[str, int] = field(default_factory=dict)
     dice_rolls: list[dict[str, Any]] = field(default_factory=list)
+    movement_history: list[dict[str, Any]] = field(default_factory=list)
     save_path: Optional[str] = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -336,6 +337,7 @@ class GameSession:
             "show_landing_prompts": self.show_landing_prompts,
             "turn_counts": self.turn_counts,
             "dice_rolls": self.dice_rolls,
+            "movement_history": self.movement_history,
         }
 
     @classmethod
@@ -352,6 +354,7 @@ class GameSession:
         payload.setdefault("show_landing_prompts", True)
         payload.setdefault("turn_counts", {})
         payload.setdefault("dice_rolls", [])
+        payload.setdefault("movement_history", [])
         payload["transactions"] = [
             Transaction.from_dict(transaction)
             for transaction in payload.get("transactions", [])
