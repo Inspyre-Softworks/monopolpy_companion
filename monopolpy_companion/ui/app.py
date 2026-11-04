@@ -20,6 +20,7 @@ def run() -> int:
     if application is None:
         application = QApplication(sys.argv)
     load_user_font()
+    application.setStyle('Fusion')
     application.setFont(body_font(10))
     application.setApplicationName('MonopolPy Companion')
     application.setWindowIcon(make_app_icon())
