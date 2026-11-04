@@ -22,6 +22,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Routed legacy save/load helpers through atomic repository storage.
 
 ### Fixed
+- Exported the public engine, repository, session factory and models from the
+  package root so direct imports work in notebooks and applications.
 - Prevented a failing session write from truncating a previous good save.
 - Prevented invalid engine transfers from changing balances or ledger records.
 
