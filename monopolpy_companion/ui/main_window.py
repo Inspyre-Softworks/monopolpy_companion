@@ -351,6 +351,9 @@ class MainWindow(QMainWindow):
             self.player_table.setRowCount(0)
             self.board_table.setRowCount(0)
             self.ledger_table.setRowCount(0)
+            self.player_focus.setText('Choose a player to see their wallet.')
+            self.property_card.clear()
+            self.activity_label.setVisible(False)
             return
 
         current_id = self.player_picker.currentData()
@@ -364,6 +367,7 @@ class MainWindow(QMainWindow):
             if index >= 0:
                 self.player_picker.setCurrentIndex(index)
         self.player_picker.blockSignals(False)
+        self._update_player_focus()
 
         current = session.current_player
         turn_label = current.name if current is not None else 'None'
@@ -385,6 +389,11 @@ class MainWindow(QMainWindow):
                 str(len(owned)), status,
             ]
             self._fill(row, values, self.player_table)
+            if session.current_player is not None and player.player_id == session.current_player.player_id:
+                active_item = self.player_table.item(row, 0)
+                font = active_item.font()
+                font.setBold(True)
+                active_item.setFont(font)
 
         self.board_table.setRowCount(len(board))
         for row, space in enumerate(board):
@@ -413,6 +422,12 @@ class MainWindow(QMainWindow):
                 development, rent,
             ]
             self._fill(row, values, self.board_table)
+            if owner is not None:
+                owner_cell = self.board_table.item(row, 3)
+                strong = owner_cell.font()
+                strong.setBold(True)
+                owner_cell.setFont(strong)
+                owner_cell.setForeground(QBrush(QColor('#2aab7a' if not self._dark_theme else '#87e6ae')))
             if space.color_group in BOARD_GROUP_COLORS:
                 shade = QColor(BOARD_GROUP_COLORS[space.color_group])
                 # Use a readable badge-like colored name cell, not a tinted
@@ -420,8 +435,15 @@ class MainWindow(QMainWindow):
                 cell = self.board_table.item(row, 1)
                 cell.setBackground(QBrush(shade))
                 cell.setForeground(QBrush(QColor('#ffffff' if shade.lightness() < 155 else '#151c1a')))
-        if 0 <= selected_row < len(board):
-            self.board_table.setCurrentCell(selected_row, 0)
+        focus_row = (
+            self._focused_property_index
+            if self._focused_property_index is not None
+            else selected_row
+        )
+        if focus_row is not None and 0 <= focus_row < len(board):
+            self.board_table.setCurrentCell(focus_row, 0)
+            self.board_table.selectRow(focus_row)
+        self._update_property_card()
 
         recent = list(reversed(session.transactions[-100:]))
         self.ledger_table.setRowCount(len(recent))
@@ -434,12 +456,94 @@ class MainWindow(QMainWindow):
             ], self.ledger_table)
         self.setWindowTitle(f'{session.name} — MonopolPy Companion')
 
+    def _update_player_focus(self, _index: int = -1) -> None:
+        """Update the visible wallet summary whenever the active player changes."""
+        if self.controller.session is None:
+            self.player_focus.setText('Choose a player to see their wallet.')
+            return
+        player_id = self.player_picker.currentData()
+        if player_id is None:
+            self.player_focus.setText('Select a player')
+            return
+        player = self.controller.session.get_player(player_id)
+        count = len(self.controller.session.owned_spaces_for(player_id))
+        self.player_focus.setText(
+            f'WALLET  ${player.cash:,}   •   {count} deed(s)'
+        )
+
+    def _update_property_card(self) -> None:
+        """Render ownership and price from actual session state, not cached UI."""
+        session = self.controller.session
+        if session is None:
+            self.property_card.clear()
+            return
+        index = self.board_table.currentRow()
+        if not 0 <= index < len(session.board):
+            self.property_card.clear()
+            return
+        space = session.board[index]
+        state = session.property_states.get(index)
+        owner = session.owner_for(index) if space.ownable else None
+        details = space.notes or space.space_type.value.replace('_', ' ').title()
+        if state is not None:
+            if state.mortgaged:
+                details = 'Mortgaged'
+            elif state.hotel:
+                details = 'Hotel'
+            elif state.houses:
+                details = f'{state.houses} houses'
+        if owner is None or not space.ownable:
+            rent_label = ''
+        elif space.space_type is SpaceType.UTILITY:
+            rent_label = 'Rent: dice × 4 or 10'
+        else:
+            rent_label = f'Rent ${self.controller.engine.rent_due(index):,}'
+        self.property_card.update_property(
+            space.name,
+            owner.name if owner is not None else None,
+            price=space.price if space.ownable else None,
+            rent_label=rent_label,
+            details=details,
+            color=BOARD_GROUP_COLORS.get(space.color_group),
+        )
+
+    def _purchase_receipt(self, player_id: str, space_index: int) -> None:
+        """Show a durable confirmation and focus the newly acquired deed.
+
+        The session itself, not the popup choice, is the source of truth.
+        """
+        session = self.controller.session
+        if session is None:
+            return
+        state = session.get_property_state(space_index)
+        if state.owner_id != player_id:
+            self.activity_label.setText('Purchase could not be confirmed.')
+            self.activity_label.setVisible(True)
+            return
+        player = session.get_player(player_id)
+        space = session.board[space_index]
+        self._focused_property_index = space_index
+        self.board_table.setCurrentCell(space_index, 0)
+        self.board_table.selectRow(space_index)
+        self._update_property_card()
+        self._update_player_focus()
+        self.activity_label.setText(
+            f'✓ PURCHASE RECORDED  •  {player.name} owns {space.name}  •  '
+            f'Paid ${space.price:,}  •  Balance ${player.cash:,}'
+        )
+        self.activity_label.setVisible(True)
+        self.statusBar().showMessage(
+            f'{space.name} is now owned by {player.name}. Game saved.', 12000
+        )
+
     def _new_game(self) -> None:
         """Collect new-session information and open the game dashboard."""
         dialog = NewSessionDialog(self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         try:
+            self._focused_property_index = None
+            self.activity_label.setVisible(False)
             self.controller.new_session(
                 dialog.game_name, dialog.player_names, dialog.starting_cash
             )
@@ -457,6 +561,8 @@ class MainWindow(QMainWindow):
         if not path:
             return
         try:
+            self._focused_property_index = None
+            self.activity_label.setVisible(False)
             self.controller.open_session(path)
         except (OSError, ValueError, TypeError, KeyError) as exc:
             self._show_error('Could not open game', exc)
@@ -477,6 +583,9 @@ class MainWindow(QMainWindow):
         for attempt in range(2):
             try:
                 result = self.controller.perform(action, *args, **kwargs)
+                if action == 'purchase':
+                    self._purchase_receipt(args[0], args[1])
+                    return result
                 self.statusBar().showMessage(
                     f'{action.replace("_", " ").capitalize()} completed and saved.', 6000
                 )
@@ -609,7 +718,9 @@ class MainWindow(QMainWindow):
     def _handle_landing(self, player_id: str, result) -> None:
         """Highlight the landing and optionally offer purchase/rent resolution."""
         space = result.landed_on
+        self._focused_property_index = space.index
         self.board_table.selectRow(space.index)
+        self._update_property_card()
         item = self.board_table.item(space.index, 1)
         if item is not None:
             self.board_table.scrollToItem(item)
