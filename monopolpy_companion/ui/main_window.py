@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QColor, QBrush
+from PySide6.QtGui import QAction, QColor, QBrush, QFont
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QFileDialog, QGridLayout, QLineEdit,
-    QGroupBox, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
+    QFrame, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
     QSpinBox, QSplitter, QTableWidgetItem, QToolBar, QVBoxLayout, QWidget,
 )
 
@@ -24,7 +24,8 @@ from .dialogs import NewSessionDialog, TransferDialog
 from .account_dialog import PlayerAccountDialog
 from .branding import BOARD_GROUP_COLORS, make_app_icon
 from .theme import stylesheet
-from .widgets import HelpButton, ReadOnlyTable
+from .fonts import display_font
+from .widgets import HelpButton, PanelCard, PropertyDetailCard, ReadOnlyTable
 
 
 class MainWindow(QMainWindow):
@@ -40,16 +41,17 @@ class MainWindow(QMainWindow):
         self.controller = controller or SessionController()
         self._dark_theme = True
         self._action_buttons: list[HelpButton] = []
+        self._focused_property_index: int | None = None
         self._build_ui()
         self.controller.subscribe(lambda _event: self.refresh())
         self.refresh()
 
     def _build_ui(self) -> None:
-        """Create accessible, reusable views and action controls."""
+        """Build a contemporary, card-based electronic banker dashboard."""
         self.setWindowTitle('MonopolPy Companion — Game Dashboard')
         self.setWindowIcon(make_app_icon())
-        self.resize(1180, 790)
-        self.setMinimumSize(920, 590)
+        self.resize(1360, 880)
+        self.setMinimumSize(980, 670)
 
         toolbar = QToolBar('Game commands', self)
         toolbar.setMovable(False)
@@ -61,10 +63,10 @@ class MainWindow(QMainWindow):
             self._new_game,
         )
         self.open_action = self._toolbar_action(
-            toolbar, 'Open', 'Load a saved JSON session', self._open_game
+            toolbar, 'Open', 'Resume an existing saved game', self._open_game
         )
         self.save_action = self._toolbar_action(
-            toolbar, 'Save', 'Save all cash balances and game state', self._save
+            toolbar, 'Save', 'Save player balances and game state', self._save
         )
         toolbar.addSeparator()
         self.next_action = self._toolbar_action(
@@ -73,42 +75,72 @@ class MainWindow(QMainWindow):
         )
         toolbar.addSeparator()
         self.landing_action = self._toolbar_action(
-            toolbar, 'Landing alerts', 'Ask to buy or pay rent after dice movement.',
+            toolbar, 'Landing alerts', 'Show purchase and rent decisions after movement',
             self._toggle_landing_prompts,
         )
         self.landing_action.setCheckable(True)
         self.landing_action.setChecked(True)
         toolbar.addSeparator()
         self.theme_action = self._toolbar_action(
-            toolbar, 'Light theme', 'Switch between light and dark colors',
+            toolbar, 'Light theme', 'Switch between light and dark palettes',
             self._toggle_theme,
         )
 
         central = QWidget(self)
+        central.setObjectName('centralSurface')
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setContentsMargins(16, 12, 16, 12)
-        root.setSpacing(9)
+        root.setContentsMargins(24, 21, 24, 20)
+        root.setSpacing(16)
 
-        title = QLabel('MonopolPy Companion')
+        hero = QFrame()
+        hero.setObjectName('hero')
+        hero_layout = QHBoxLayout(hero)
+        hero_layout.setContentsMargins(24, 18, 24, 18)
+        hero_layout.setSpacing(16)
+        headline = QVBoxLayout()
+        headline.setSpacing(4)
+        eyebrow = QLabel('THE ELECTRONIC BANKER  /  GAME NIGHT')
+        eyebrow.setObjectName('eyebrow')
+        headline.addWidget(eyebrow)
+        title = QLabel('MONOPOLPY')
         title.setObjectName('headerTitle')
-        root.addWidget(title)
-        self.subtitle = QLabel('Start a game or open a save to begin.')
+        title.setFont(display_font(28))
+        headline.addWidget(title)
+        self.subtitle = QLabel('Start a session to keep every deed and dollar accounted for.')
         self.subtitle.setObjectName('subTitle')
-        root.addWidget(self.subtitle)
+        headline.addWidget(self.subtitle)
+        hero_layout.addLayout(headline, stretch=1)
+        brand_mark = QLabel('BUY  •  BUILD  •  COLLECT')
+        brand_mark.setObjectName('meta')
+        brand_mark.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        hero_layout.addWidget(brand_mark)
+        root.addWidget(hero)
 
-        self.welcome_widget = QGroupBox('Start a game')
-        welcome_layout = QVBoxLayout(self.welcome_widget)
-        greeting = QLabel(
-            'MONOPOLPY GAME NIGHT\n'
-            'Start a new session or open an existing save.'
+        self.activity_label = QLabel('')
+        self.activity_label.setObjectName('activityBanner')
+        self.activity_label.setWordWrap(True)
+        self.activity_label.setAccessibleDescription(
+            'Confirmation for completed property purchases and payments.'
         )
-        greeting.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        welcome_layout.addWidget(greeting)
+        self.activity_label.setVisible(False)
+        root.addWidget(self.activity_label)
+
+        self.welcome_widget = PanelCard(
+            'Welcome to game night',
+            'Every property, payment and roll in one place. Choose how to begin.',
+        )
+        welcome_layout = self.welcome_widget.layout_root
+        welcome_layout.addStretch()
+        welcome_message = QLabel('READY TO PASS GO?')
+        welcome_message.setFont(display_font(28))
+        welcome_message.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        welcome_layout.addWidget(welcome_message)
         start_buttons = QHBoxLayout()
         start_buttons.addStretch()
-        start_new = HelpButton('New Game', 'Create players and initial cash.')
-        start_open = HelpButton('Open Game', 'Resume a saved board game.')
+        start_new = HelpButton('Start new game', 'Create players and starting balances')
+        start_new.setObjectName('primaryAction')
+        start_open = HelpButton('Open saved game', 'Resume a saved Monopoly session')
         start_new.clicked.connect(self._new_game)
         start_open.clicked.connect(self._open_game)
         start_buttons.addWidget(start_new)
@@ -118,22 +150,26 @@ class MainWindow(QMainWindow):
         welcome_layout.addStretch()
         root.addWidget(self.welcome_widget, stretch=1)
 
-        column_splitter = QSplitter(Qt.Orientation.Horizontal)
-        column_splitter.addWidget(self._build_player_group())
-        column_splitter.addWidget(self._build_board_group())
-        column_splitter.setStretchFactor(0, 3)
-        column_splitter.setStretchFactor(1, 5)
+        columns = QSplitter(Qt.Orientation.Horizontal)
+        columns.setChildrenCollapsible(False)
+        columns.addWidget(self._build_player_group())
+        columns.addWidget(self._build_board_group())
+        columns.setStretchFactor(0, 3)
+        columns.setStretchFactor(1, 5)
+        columns.setSizes([440, 750])
 
-        vertical_splitter = QSplitter(Qt.Orientation.Vertical)
-        vertical_splitter.addWidget(column_splitter)
-        vertical_splitter.addWidget(self._build_ledger_group())
-        vertical_splitter.setStretchFactor(0, 5)
-        vertical_splitter.setStretchFactor(1, 2)
-        self.dashboard_widget = vertical_splitter
+        dashboard = QSplitter(Qt.Orientation.Vertical)
+        dashboard.setChildrenCollapsible(False)
+        dashboard.addWidget(columns)
+        dashboard.addWidget(self._build_ledger_group())
+        dashboard.setStretchFactor(0, 5)
+        dashboard.setStretchFactor(1, 1)
+        dashboard.setSizes([585, 190])
+        self.dashboard_widget = dashboard
         root.addWidget(self.dashboard_widget, stretch=1)
 
         self.statusBar().showMessage(
-            'New game: create players. Open: resume an existing session.'
+            'Create a new game or open a save to start managing the board.'
         )
 
     def _toolbar_action(
@@ -158,16 +194,20 @@ class MainWindow(QMainWindow):
         self._action_buttons.append(button)
         return button
 
-    def _build_player_group(self) -> QGroupBox:
+    def _build_player_group(self) -> PanelCard:
         """Build the players, dice and payment controls."""
-        group = QGroupBox('Players & banker')
-        layout = QVBoxLayout(group)
+        group = PanelCard('Players & banker', 'Track wallets, dice and player actions.')
+        layout = group.layout_root
         layout.addWidget(QLabel('Active player for actions:'))
         self.player_picker = QComboBox()
         self.player_picker.setToolTip(
             'Select which player moves, buys, pays tax, or manages assets.'
         )
         layout.addWidget(self.player_picker)
+        self.player_picker.currentIndexChanged.connect(self._update_player_focus)
+        self.player_focus = QLabel('Choose a player to see their wallet.')
+        self.player_focus.setObjectName('deedOwner')
+        layout.addWidget(self.player_focus)
 
         self.player_table = ReadOnlyTable(
             ['Player', 'Cash', 'Position', 'Assets', 'Status'],
@@ -222,16 +262,19 @@ class MainWindow(QMainWindow):
         layout.addLayout(buttons)
         return group
 
-    def _build_board_group(self) -> QGroupBox:
+    def _build_board_group(self) -> PanelCard:
         """Build a selectable board list with property actions."""
-        group = QGroupBox('Board & properties')
-        layout = QVBoxLayout(group)
-        layout.addWidget(QLabel('Select a board space, then choose a rule action.'))
+        group = PanelCard('Board & properties', 'Ownership, purchase price and current rent at a glance.')
+        layout = group.layout_root
+        self.property_card = PropertyDetailCard()
+        layout.addWidget(self.property_card)
         self.board_table = ReadOnlyTable(
             ['#', 'Board space', 'Type', 'Owner', 'Development', 'Rent'],
             'All 40 Monopoly spaces; choose a row before purchasing or collecting rent.',
         )
-        self.board_table.setMinimumHeight(290)
+        self.board_table.setMinimumHeight(250)
+        self.board_table.setColumnWidth(0, 42)
+        self.board_table.itemSelectionChanged.connect(self._update_property_card)
         layout.addWidget(self.board_table, stretch=1)
         buttons = QGridLayout()
         self._button(
@@ -265,10 +308,10 @@ class MainWindow(QMainWindow):
         layout.addLayout(buttons)
         return group
 
-    def _build_ledger_group(self) -> QGroupBox:
+    def _build_ledger_group(self) -> PanelCard:
         """Build the most recent transaction-history view."""
-        group = QGroupBox('Recent transactions')
-        layout = QVBoxLayout(group)
+        group = PanelCard('Transaction ledger', 'Audited changes to cash and ownership, newest first.')
+        layout = group.layout_root
         self.ledger_table = ReadOnlyTable(
             ['When (UTC)', 'Action', 'Amount', 'Details'],
             'The latest 100 recorded transactions, most recent first.',
