@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
 from .models import GameSession
@@ -19,6 +19,10 @@ class GameplayStatistics:
     turns_started: int = 0
     times_passed_go: int = 0
     average_dice_total: float = 0.0
+    games_played: int = 0
+    games_completed: int = 0
+    games_won: int = 0
+    bankruptcies: int = 0
 
 
 @dataclass
@@ -111,7 +115,7 @@ class StatisticsService:
                 finance.total_money_spent += transaction.amount
                 if kind == 'tax':
                     finance.total_taxes_paid += transaction.amount
-                elif kind == 'purchase':
+                elif kind in {'purchase', 'auction_purchase'}:
                     finance.total_property_purchases += transaction.amount
                     purchases += 1
                 elif kind == 'deal':
@@ -135,6 +139,10 @@ class StatisticsService:
         finance.average_rent_paid_per_turn = finance.rent_paid / turns if turns else 0.0
         finance.average_rent_earned_per_turn = finance.rent_earned / turns if turns else 0.0
         gameplay = GameplayStatistics(
+            games_played=1,
+            games_completed=int(self.session.winner_id is not None),
+            games_won=int(self.session.winner_id == player_id),
+            bankruptcies=int(player.bankrupt),
             dice_rolls=len(roll_history),
             doubles_rolled=sum(r['die_one'] == r['die_two'] for r in roll_history),
             total_spaces_moved=sum(int(m['spaces']) for m in movement),
@@ -151,3 +159,32 @@ class StatisticsService:
             len(self.session.owned_spaces_for(player_id)),
             gameplay, finance,
         )
+
+    @staticmethod
+    def overall(current: PlayerReport, history: list[PlayerReport]) -> PlayerReport:
+        """Combine distinct game reports, weighting averages by rolls or turns."""
+        reports = [current, *history]
+        counts = {
+            item.name: sum(getattr(report.gameplay, item.name) for report in reports)
+            for item in fields(GameplayStatistics) if item.name != 'average_dice_total'
+        }
+        rolls = counts['dice_rolls']
+        roll_total = sum(report.gameplay.average_dice_total * report.gameplay.dice_rolls
+                         for report in reports)
+        gameplay = GameplayStatistics(**counts, average_dice_total=roll_total / rolls if rolls else 0)
+        finance = FinancialStatistics()
+        for item in fields(FinancialStatistics):
+            if item.name.startswith('average_'):
+                continue
+            total = getattr(finance, item.name)
+            if isinstance(total, dict):
+                for report in reports:
+                    for name, amount in getattr(report.finance, item.name).items():
+                        StatisticsService._add(total, name, amount)
+            else:
+                setattr(finance, item.name, sum(getattr(report.finance, item.name) for report in reports))
+        turns = gameplay.turns_started
+        if turns:
+            finance.average_rent_paid_per_turn = finance.rent_paid / turns
+            finance.average_rent_earned_per_turn = finance.rent_earned / turns
+        return replace(current, gameplay=gameplay, finance=finance)

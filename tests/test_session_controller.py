@@ -19,6 +19,44 @@ class SessionControllerTests(unittest.TestCase):
             repository=self.repository, logger=logging.getLogger('monopoly.test')
         )
 
+    def test_marauders_map_requires_unlock_and_relocks_when_a_save_is_opened(self):
+        session = self.controller.new_session('Map', ['Avery', 'Blake'])
+        player = session.players[0]
+        self.assertFalse(self.controller.unlock_dev_tools('Mischief managed'))
+        with self.assertRaisesRegex(ValueError, 'locked'):
+            self.controller.perform('dev_grant_cash', player.player_id, 500)
+        self.assertTrue(self.controller.unlock_dev_tools('I solemnly swear that I am up to no good.'))
+        self.controller.perform('dev_grant_cash', player.player_id, 500)
+        self.controller.perform('dev_grant_deed', player.player_id, 1)
+        with self.assertRaisesRegex(ValueError, 'unowned'):
+            self.controller.perform('dev_grant_deed', session.players[1].player_id, 1)
+        self.controller.perform('dev_grant_building', player.player_id, 1)
+        self.controller.perform('dev_grant_building', player.player_id, 1, hotel=True)
+        restored = self.controller.open_session(session.save_path)
+        self.assertFalse(self.controller.dev_tools_unlocked)
+        self.assertEqual(restored.players[0].cash, 2000)
+        self.assertEqual(restored.owner_for(1).player_id, player.player_id)
+        self.assertTrue(restored.get_property_state(1).hotel)
+        self.assertEqual(restored.transactions[-1].kind, 'dev_building_grant')
+        self.controller.perform('sell_building', player.player_id, 1)
+        self.assertEqual(restored.get_property_state(1).houses, 4)
+
+    def test_go_salary_settings_save_validate_and_rollback(self):
+        from unittest.mock import patch
+        session = self.controller.new_session('Salary', ['Avery', 'Blake'])
+        self.controller.set_go_salary(350, double_on_go=True)
+        restored = self.repository.load(session.save_path)
+        self.assertEqual(restored.rules.salary_on_go, 350)
+        self.assertTrue(restored.rules.double_salary_on_go)
+        for invalid in (-1, True, 1.5, 1000001):
+            with self.assertRaises(ValueError):
+                self.controller.set_go_salary(invalid)
+        before = session.to_dict()
+        with patch.object(self.repository, 'save', side_effect=OSError('Disk full')):
+            with self.assertRaises(OSError):
+                self.controller.set_go_salary(500, double_on_go=False)
+        self.assertEqual(session.to_dict(), before)
+
     def test_creates_autosaves_and_reopens_session(self):
         events = []
         self.controller.subscribe(events.append)
@@ -56,6 +94,7 @@ class SessionControllerTests(unittest.TestCase):
         def broken(_event):
             raise RuntimeError('Subscriber failure')
 
+        self.controller.perform('move_by_dice', self.controller.session.current_player.player_id, 1, 2)
         self.controller.subscribe(broken)
         self.controller.perform('advance_turn')
         self.assertEqual(self.controller.session.current_turn_index, 1)

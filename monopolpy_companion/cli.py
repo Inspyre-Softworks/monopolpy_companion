@@ -26,14 +26,26 @@ def main(argv: list[str] | None = None) -> int:
     choice.add_argument('--summary', type=Path, help='Summarize a saved JSON session')
     choice.add_argument('--gui', action='store_true', help='Launch the new Qt dashboard')
     choice.add_argument('--legacy-gui', action='store_true', help='Launch the old PySimpleGUI shell')
+    choice.add_argument('--list-plugins', action='store_true',
+                        help='List installed plugin entry points without loading them')
+    parser.add_argument('--enable-plugin', action='append', default=[],
+                        metavar='ID', help='Enable a plugin for this GUI launch')
     args = parser.parse_args(argv)
+    if args.enable_plugin and not args.gui:
+        parser.error('--enable-plugin requires --gui')
+    if args.list_plugins:
+        from .plugins import installed_plugins
+
+        for entry in sorted(installed_plugins(), key=lambda item: (item.name, item.value)):
+            print(f'{entry.name}: {entry.value}')
+        return 0
 
     if args.gui:
         try:
             from .ui.app import run
         except ImportError as exc:
             parser.error(f'Qt GUI requires the optional gui extra: {exc}')
-        return run()
+        return run(args.enable_plugin)
 
     if args.legacy_gui:
         try:

@@ -9,18 +9,25 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QColor, QBrush, QFont
+from PySide6.QtCore import Qt, QSettings, QTimer
+from PySide6.QtGui import QAction, QColor, QBrush, QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QFileDialog, QGridLayout, QLineEdit,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
-    QSpinBox, QSplitter, QTableWidgetItem, QToolBar, QVBoxLayout, QWidget,
+    QSpinBox, QSplitter, QTableWidgetItem, QToolBar, QVBoxLayout, QWidget, QTabWidget, QHeaderView, QScrollArea, QLayout,
 )
 
 from monopolpy_companion.controller import SessionController, SessionSaveError
 from monopolpy_companion.game import GameSession, SpaceType
+from monopolpy_companion.plugins import PluginManager
 
-from .dialogs import NewSessionDialog, TransferDialog
+from .dialogs import NewSessionDialog, TransferDialog, NewAccountDialog, SettingsDialog, GameSettingsDialog
+from monopolpy_companion.game.accounts import AccountStore
+from monopolpy_companion.lib.common.paths import APP_DATA_DIR
+from .trade_dialog import TradeDialog
+from .dev_tools_dialog import DevToolsDialog
+from .property_tracker import PropertyTrackers
+from .widgets import TitleBar
 from .account_dialog import PlayerAccountDialog
 from .branding import BOARD_GROUP_COLORS, make_app_icon
 from .theme import stylesheet
@@ -36,20 +43,85 @@ class MainWindow(QMainWindow):
             automatically if no controller is supplied.
     """
 
-    def __init__(self, controller: SessionController | None = None) -> None:
+    def __init__(
+        self, controller: SessionController | None = None, *,
+        enabled_plugins: list[str] | None = None,
+    ) -> None:
         super().__init__()
         self.controller = controller or SessionController()
-        self._dark_theme = True
+        self.settings = QSettings('Inspyre Softworks', 'MonopolPy Companion')
+        self.accounts = AccountStore(APP_DATA_DIR / 'accounts')
+        self._dark_theme = self.settings.value('dark', True, type=bool)
         self._action_buttons: list[HelpButton] = []
         self._focused_property_index: int | None = None
         self._build_ui()
-        self.controller.subscribe(lambda _event: self.refresh())
+        self._apply_preferences()
+        self.controller.subscribe(self._on_game_event)
         self.refresh()
+        self._plugins = PluginManager(
+            self.controller, register_action=self._register_plugin_action
+        ) if enabled_plugins else None
+        if self._plugins is not None:
+            for identifier in enabled_plugins:
+                self._plugins.enable(identifier)
+
+    def _register_plugin_action(self, label, callback):
+        if not self._plugin_toolbar.actions():
+            self._plugin_toolbar.show()
+        action = self._plugin_toolbar.addAction(label)
+        action.triggered.connect(callback)
+
+        def remove():
+            self._plugin_toolbar.removeAction(action)
+            action.deleteLater()
+            if not self._plugin_toolbar.actions():
+                self._plugin_toolbar.hide()
+
+        return remove
+
+    def closeEvent(self, event):
+        super().closeEvent(event)
+        if event.isAccepted() and self._plugins is not None:
+            self._plugins.close()
+
+    def _on_game_event(self, event):
+        self.refresh(follow_turn=event.name in {'turn_advanced', 'session_changed'})
+        if event.name == 'session_changed':
+            self.salary_timer.stop()
+            self.salary_notice.hide()
+        elif event.name == 'bankruptcy_declared':
+            player = self.controller.session.get_player(event.details['player_id'])
+            message = f'{player.name} declared bankruptcy and is out of the game.'
+            if event.details['winner_id'] is not None:
+                winner = self.controller.session.get_player(event.details['winner_id'])
+                message += f' {winner.name} wins!'
+            self.activity_label.setText(message)
+            self.activity_label.show()
+        elif event.name == 'auction_finished':
+            space = self.controller.session.board[event.details['space_index']]
+            winner_id = event.details['winner_id']
+            if winner_id is None:
+                message = f'{space.name} received no bids and remains unowned.'
+            else:
+                winner = self.controller.session.get_player(winner_id)
+                message = f"{winner.name} won {space.name} for ${event.details['amount']:,}."
+            self.activity_label.setText(message)
+            self.activity_label.show()
+        elif event.name == 'go_salary_paid':
+            player = self.controller.session.get_player(event.details['player_id'])
+            self.salary_notice.setText(
+                f"GO SALARY  +${event.details['amount']:,}  |  {player.name}  |  "
+                f"Balance ${event.details['balance']:,}"
+            )
+            self.salary_notice.show()
+            self.salary_timer.start(10000)
 
     def _build_ui(self) -> None:
         """Build a contemporary, card-based electronic banker dashboard."""
         self.setWindowTitle('MonopolPy Companion — Game Dashboard')
         self.setWindowIcon(make_app_icon())
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.setMenuWidget(TitleBar(self))
         self.resize(1360, 880)
         self.setMinimumSize(980, 670)
 
@@ -57,6 +129,10 @@ class MainWindow(QMainWindow):
         toolbar.setMovable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.addToolBar(toolbar)
+        self._plugin_toolbar = QToolBar('Plugins', self)
+        self._plugin_toolbar.setMovable(False)
+        self.addToolBar(self._plugin_toolbar)
+        self._plugin_toolbar.hide()
 
         self.new_action = self._toolbar_action(
             toolbar, 'New game', 'Create a new session with two or more players',
@@ -68,6 +144,19 @@ class MainWindow(QMainWindow):
         self.save_action = self._toolbar_action(
             toolbar, 'Save', 'Save player balances and game state', self._save
         )
+        self._toolbar_action(toolbar, 'Create Account', 'Register a local account', self._create_account)
+        self._toolbar_action(toolbar, 'Settings', 'Save desktop preferences', self._settings)
+        self.game_settings_action = self._toolbar_action(
+            toolbar, 'Game Settings', 'Set the active game GO salary', self._game_settings
+        )
+        self.mortgages_action = self._toolbar_action(toolbar, 'Mortgages', 'Select several properties and preview borrowing or repayment', lambda: self._open_mortgage_planner('mortgage'))
+        self.dev_action = self._toolbar_action(
+            toolbar, 'Marauder’s Map', 'Open unlocked game grants', self._open_dev_tools
+        )
+        self.dev_action.setVisible(False)
+        self.dev_shortcut = QShortcut(QKeySequence('Ctrl+Shift+M'), self)
+        self.dev_shortcut.activated.connect(self._open_dev_tools)
+        self.trade_action = self._toolbar_action(toolbar, 'Trade', 'Exchange cash and assets between players', self._trade)
         toolbar.addSeparator()
         self.next_action = self._toolbar_action(
             toolbar, 'Next turn', 'Advance to the next nonbankrupt player',
@@ -102,18 +191,28 @@ class MainWindow(QMainWindow):
         headline.setSpacing(4)
         eyebrow = QLabel('THE ELECTRONIC BANKER  /  GAME NIGHT')
         eyebrow.setObjectName('eyebrow')
+        eyebrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         headline.addWidget(eyebrow)
         title = QLabel('MONOPOLPY')
         title.setObjectName('headerTitle')
-        title.setFont(display_font(28))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         headline.addWidget(title)
         self.subtitle = QLabel('Start a session to keep every deed and dollar accounted for.')
         self.subtitle.setObjectName('subTitle')
+        self.subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         headline.addWidget(self.subtitle)
         hero_layout.addLayout(headline, stretch=1)
         brand_mark = QLabel('BUY  •  BUILD  •  COLLECT')
         brand_mark.setObjectName('meta')
         brand_mark.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        # Balance the right-hand tagline so the heading is centered in the banner.
+        balance = QLabel(brand_mark.text())
+        balance.setObjectName('meta')
+        policy = balance.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        balance.setSizePolicy(policy)
+        balance.hide()
+        hero_layout.insertWidget(0, balance)
         hero_layout.addWidget(brand_mark)
         root.addWidget(hero)
 
@@ -125,6 +224,19 @@ class MainWindow(QMainWindow):
         )
         self.activity_label.setVisible(False)
         root.addWidget(self.activity_label)
+        self.salary_notice = QLabel()
+        self.salary_notice.setObjectName('salaryNotice')
+        self.salary_notice.setWordWrap(True)
+        self.salary_notice.setAccessibleDescription('Automatic GO salary payment confirmation')
+        self.salary_notice.setStyleSheet(
+            'background-color: #5b4515; color: #fff1b8; border: 1px solid #e7bd51; '
+            'border-radius: 10px; padding: 12px 16px; font-weight: 700;'
+        )
+        self.salary_notice.hide()
+        self.salary_timer = QTimer(self)
+        self.salary_timer.setSingleShot(True)
+        self.salary_timer.timeout.connect(self.salary_notice.hide)
+        root.addWidget(self.salary_notice)
 
         self.welcome_widget = PanelCard(
             'Welcome to game night',
@@ -145,26 +257,44 @@ class MainWindow(QMainWindow):
         start_open.clicked.connect(self._open_game)
         start_buttons.addWidget(start_new)
         start_buttons.addWidget(start_open)
+        create = HelpButton('Create Account', 'Register a reusable local player')
+        create.clicked.connect(self._create_account)
+        start_buttons.addWidget(create)
         start_buttons.addStretch()
         welcome_layout.addLayout(start_buttons)
         welcome_layout.addStretch()
         root.addWidget(self.welcome_widget, stretch=1)
 
-        columns = QSplitter(Qt.Orientation.Horizontal)
-        columns.setChildrenCollapsible(False)
-        columns.addWidget(self._build_player_group())
-        columns.addWidget(self._build_board_group())
-        columns.setStretchFactor(0, 3)
-        columns.setStretchFactor(1, 5)
-        columns.setSizes([440, 750])
+        root.addWidget(self._build_quick_actions())
 
-        dashboard = QSplitter(Qt.Orientation.Vertical)
+        self.property_trackers = PropertyTrackers()
+        tracker_card = PanelCard('Property ownership',
+            'Outline = not owned here. Filled = owned. X = mortgaged. Gold outline = complete set.')
+        tracker_card.layout_root.addWidget(self.property_trackers)
+        controls = QTabWidget()
+        for panel, title in [(self._build_player_group(), 'Players & banker'),
+                             (self._build_board_group(), 'Board & properties')]:
+            panel.layout_root.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+            scroller = QScrollArea()
+            scroller.setWidgetResizable(True)
+            scroller.setFrameShape(QFrame.Shape.NoFrame)
+            scroller.setWidget(panel)
+            controls.addTab(scroller, title)
+        main_pane = QSplitter(Qt.Orientation.Vertical)
+        main_pane.setChildrenCollapsible(False)
+        main_pane.addWidget(tracker_card)
+        main_pane.addWidget(controls)
+        main_pane.setStretchFactor(0, 2)
+        main_pane.setStretchFactor(1, 3)
+        main_pane.setSizes([380, 320])
+
+        dashboard = QSplitter(Qt.Orientation.Horizontal)
         dashboard.setChildrenCollapsible(False)
-        dashboard.addWidget(columns)
+        dashboard.addWidget(main_pane)
         dashboard.addWidget(self._build_ledger_group())
-        dashboard.setStretchFactor(0, 5)
+        dashboard.setStretchFactor(0, 3)
         dashboard.setStretchFactor(1, 1)
-        dashboard.setSizes([585, 190])
+        dashboard.setSizes([870, 420])
         self.dashboard_widget = dashboard
         root.addWidget(self.dashboard_widget, stretch=1)
 
@@ -194,6 +324,174 @@ class MainWindow(QMainWindow):
         self._action_buttons.append(button)
         return button
 
+    def _build_quick_actions(self) -> PanelCard:
+        self.quick_actions = PanelCard('Quick Actions')
+        self.quick_status = QLabel()
+        self.quick_status.setWordWrap(True)
+        self.quick_actions.layout_root.addWidget(self.quick_status)
+        row = QHBoxLayout()
+        self.quick_buttons = {}
+        actions = (
+            ('roll', 'Roll dice', lambda: self._quick_for_current(self._roll_dice)),
+            ('roll_move', 'Roll + move', lambda: self._quick_for_current(self._roll_and_move)),
+            ('move', 'Move using roll', lambda: self._quick_for_current(self._move_by_dice)),
+            ('pay', 'Pay amount owed', lambda: self._quick_for_current(self._pay_outstanding)),
+            ('buy', 'Buy property', self._buy_landing),
+            ('auction', 'Start auction', self._start_landing_auction),
+            ('bid', 'Place bid', self._place_auction_bid),
+            ('pass', 'Pass', lambda: self._auction_command('pass_at_auction')),
+            ('jail_roll', 'Roll for doubles', lambda: self._quick_for_current(self._jail_roll)),
+            ('bail', 'Pay $50 bail', lambda: self._quick_for_current(self._jail_bail)),
+            ('jail_card', 'Use jail release card', lambda: self._quick_for_current(self._release_from_jail)),
+            ('mortgage', 'Mortgages', lambda: self._quick_for_current(lambda: self._open_mortgage_planner('mortgage'))),
+            ('trade', 'Trade', lambda: self._quick_for_current(self._trade)),
+            ('bankruptcy', 'Declare bankruptcy', self._declare_bankruptcy),
+            ('next', 'Next turn', lambda: self._perform('advance_turn')),
+        )
+        for key, text, callback in actions:
+            button = HelpButton(text, text, self.quick_actions)
+            button.clicked.connect(callback)
+            self.quick_buttons[key] = button
+            row.addWidget(button)
+        row.addStretch()
+        self.quick_actions.layout_root.addLayout(row)
+        return self.quick_actions
+
+    def _quick_for_current(self, callback):
+        player = self.controller.session.current_player
+        if player is not None:
+            self.player_picker.setCurrentIndex(self.player_picker.findData(player.player_id))
+            callback()
+
+    def _refresh_quick_actions(self):
+        session = self.controller.session
+        player = session.current_player if session else None
+        self.quick_actions.setVisible(player is not None)
+        if player is None:
+            return
+        engine = self.controller.engine
+        visible = {}
+        status = player.name
+        auction = session.auction
+        if session.winner_id is not None:
+            status = f'{session.get_player(session.winner_id).name} wins!'
+        elif auction is not None:
+            bidder = session.get_player(engine.auction_bidder())
+            space = session.board[auction['space_index']]
+            leader = session.get_player(auction['leader']).name if auction['leader'] else None
+            high_bid = f"{leader} leads at ${auction['bid']:,}." if leader else 'No bids yet.'
+            status = f'Auction for {space.name}. {high_bid} {bidder.name} to bid or pass.'
+            visible = {'bid': bidder.cash > auction['bid'], 'pass': True}
+        else:
+            player_id = player.player_id
+            debts = engine.outstanding_payments(player_id)
+            offer = session.purchase_offer
+            visible = {'trade': True}
+            if debts:
+                debt = debts[0]
+                space = session.board[debt['space_index']]
+                amount = f"${debt['amount']:,}" if debt['amount'] is not None else 'dice total required'
+                status += f" owes {debt['kind']} on {space.name} ({amount})."
+                self.quick_buttons['pay'].setText(f"Pay {debt['kind']} ({amount})")
+                visible.update(pay=True, mortgage=True)
+                if debt['amount'] is None or debt['amount'] > player.cash:
+                    visible['bankruptcy'] = True
+            elif offer is not None:
+                space = session.board[offer]
+                status += f' can buy {space.name} for ${space.price:,} or start an auction.'
+                self.quick_buttons['buy'].setText(f'Buy for ${space.price:,}')
+                visible.update(buy=player.cash >= space.price, auction=True)
+            elif player.in_jail and not session.turn_ended:
+                status += ' is in Jail.'
+                visible.update(jail_roll=engine.can_roll_for_doubles(player_id), bail=player.cash >= 50,
+                               jail_card=player.get_out_of_jail_cards > 0 and player.jail_turns < 3
+                               and not any(session.dice_rolls[index].get('source') == 'jail'
+                                           for index in session.turn_roll_indices))
+                if player.cash < 50:
+                    visible['mortgage'] = True
+                    if player.jail_turns >= 3:
+                        visible['bankruptcy'] = True
+            elif engine.can_roll(player_id):
+                status += ' can roll the dice.'
+                visible.update(roll=True, roll_move=True)
+            elif engine.can_move_by_dice(player_id):
+                roll = session.dice_rolls[session.turn_roll_indices[-1]]
+                status += f" rolled {roll['die_one']} + {roll['die_two']}. Move using that roll."
+                visible['move'] = True
+            elif engine.can_advance_turn():
+                status += ' can end the turn.'
+            if engine.can_advance_turn():
+                visible['next'] = True
+        self.quick_status.setText(status)
+        for key, button in self.quick_buttons.items():
+            button.setVisible(key in visible)
+            button.setEnabled(visible.get(key, False))
+
+    def _declare_bankruptcy(self):
+        session = self.controller.session
+        player_id = session.current_player.player_id
+        debts = self.controller.engine.outstanding_payments(player_id)
+        options = {}
+        if debts and debts[0]['amount'] is None:
+            total, accepted = QInputDialog.getInt(self, 'Utility rent',
+                                                  'Dice total for this utility landing:', 7, 2, 12)
+            if not accepted:
+                return
+            options['dice_total'] = total
+        try:
+            quote = self.controller.engine.bankruptcy_quote(player_id, **options)
+        except (ValueError, KeyError) as exc:
+            self._show_error('Cannot declare bankruptcy', exc)
+            return
+        creditor_id = quote['creditor_id']
+        destination = session.get_player(creditor_id).name if creditor_id is not None else 'the bank'
+        deeds = ', '.join(space.name for space in quote['deeds']) or 'none'
+        review = (
+            f"{session.current_player.name} owes ${quote['amount']:,} and will leave the game.\n\n"
+            f"Recipient: {destination}\n"
+            f"Cash surrendered: ${quote['cash']:,} (including ${quote['building_proceeds']:,} from buildings)\n"
+            f"Deeds: {deeds}\nJail cards surrendered: {quote['cards']}"
+        )
+        if sum(not player.bankrupt for player in session.players) == 2:
+            review += '\nThe remaining player wins.'
+        elif creditor_id is None and quote['deeds']:
+            review += '\nThe bank will clear mortgages and auction the deeds.'
+        elif quote['interest']:
+            interest = sum(amount for _, amount in quote['interest'])
+            review += f'\n{destination} takes over the mortgages and owes ${interest:,} in interest.'
+        if QMessageBox.question(self, 'Confirm bankruptcy', review,
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+            self._perform('declare_bankruptcy', player_id, **options)
+
+    def _buy_landing(self):
+        session = self.controller.session
+        if session.purchase_offer is not None:
+            self._perform('purchase', session.current_player.player_id, session.purchase_offer)
+
+    def _start_landing_auction(self):
+        self._perform('start_auction', self.controller.session.current_player.player_id)
+
+    def _auction_command(self, action, *args):
+        bidder = self.controller.engine.auction_bidder()
+        if bidder is not None:
+            self._perform(action, bidder, *args)
+
+    def _place_auction_bid(self):
+        auction = self.controller.session.auction
+        bidder = self.controller.engine.auction_bidder()
+        if auction is None or bidder is None:
+            return
+        player = self.controller.session.get_player(bidder)
+        minimum = auction['bid'] + 1
+        maximum = min(player.cash, 2_147_483_647)
+        if minimum <= maximum:
+            amount, accepted = QInputDialog.getInt(
+                self, 'Auction bid', f'{player.name} bids (available cash ${player.cash:,})',
+                minimum, minimum, maximum)
+            if accepted:
+                self._auction_command('bid_at_auction', amount)
+
     def _build_player_group(self) -> PanelCard:
         """Build the players, dice and payment controls."""
         group = PanelCard('Players & banker', 'Track wallets, dice and player actions.')
@@ -208,6 +506,15 @@ class MainWindow(QMainWindow):
         self.player_focus = QLabel('Choose a player to see their wallet.')
         self.player_focus.setObjectName('deedOwner')
         layout.addWidget(self.player_focus)
+        self.payment_notice = QLabel()
+        self.payment_notice.setWordWrap(True)
+        self.payment_notice.setAccessibleDescription('Unpaid rent and tax charges blocking the next turn')
+        layout.addWidget(self.payment_notice)
+        self.pay_outstanding_button = HelpButton('Pay amount owed', 'Pay the oldest outstanding rent or tax charge')
+        self.pay_outstanding_button.clicked.connect(self._pay_outstanding)
+        layout.addWidget(self.pay_outstanding_button)
+        self.payment_notice.hide()
+        self.pay_outstanding_button.hide()
 
         self.player_table = ReadOnlyTable(
             ['Player', 'Cash', 'Position', 'Assets', 'Status'],
@@ -231,7 +538,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.dice_result)
 
         buttons = QGridLayout()
-        self._button(
+        self.move_dice_button = self._button(
             'Move by dice', 'Advance the selected player by the two die values.',
             self._move_by_dice, buttons, 0, 0,
         )
@@ -243,22 +550,36 @@ class MainWindow(QMainWindow):
             'Send to jail', 'Move the selected player directly to jail.',
             lambda: self._player_action('send_to_jail'), buttons, 1, 0,
         )
-        self._button(
-            'Release from jail', 'Pay a $50 fine, use a card, or record verified doubles.',
+        self.jail_card_button = self._button(
+            'Use jail release card', 'Use an owned Get Out of Jail Free card before attempting doubles.',
             self._release_from_jail, buttons, 1, 1,
         )
-        self._button(
+        self.roll_button = self._button(
             'Roll dice', 'Simulate unbiased six-sided dice without moving yet.',
             self._roll_dice, buttons, 2, 0,
         )
-        self._button(
+        self.roll_move_button = self._button(
             'Roll + move', 'Simulate dice, then move the selected token.',
             self._roll_and_move, buttons, 2, 1,
         )
-        self._button(
+        self.player_account_button = self._button(
             'Player account', 'Show PIN controls, gameplay stats, finances and mortgages.',
             self._open_account, buttons, 3, 0,
         )
+        self._button(
+            'Trade', 'Exchange cash, properties and jail cards between two players.',
+            self._trade, buttons, 3, 1,
+        )
+        self.jail_roll_button = self._button(
+            'Roll for doubles (0/3)', 'One jail attempt per turn. Third failure requires $50 bail.',
+            self._jail_roll, buttons, 4, 0,
+        )
+        self.jail_bail_button = self._button(
+            'Pay $50 bail and release', 'Pay the bank $50 to leave Jail. Use a jail roll already made.',
+            self._jail_bail, buttons, 4, 1,
+        )
+        self.jail_roll_button.hide()
+        self.jail_bail_button.hide()
         layout.addLayout(buttons)
         return group
 
@@ -286,12 +607,12 @@ class MainWindow(QMainWindow):
             self._collect_rent, buttons, 0, 1,
         )
         self._button(
-            'Mortgage', 'Borrow half the printed price against the selected owned deed.',
-            lambda: self._board_action('mortgage'), buttons, 1, 0,
+            'Mortgage properties', 'Select owned deeds and preview proceeds and total future payoff.',
+            lambda: self._open_mortgage_planner('mortgage'), buttons, 1, 0,
         )
         self._button(
-            'Unmortgage', 'Repay the mortgage plus ten percent interest.',
-            lambda: self._board_action('unmortgage'), buttons, 1, 1,
+            'Unmortgage properties', 'Select mortgaged deeds and preview the total payoff before applying.',
+            lambda: self._open_mortgage_planner('unmortgage'), buttons, 1, 1,
         )
         self._button(
             'Build house / hotel', 'Buy evenly across an owned unmortgaged color group.',
@@ -313,9 +634,16 @@ class MainWindow(QMainWindow):
         group = PanelCard('Transaction ledger', 'Audited changes to cash and ownership, newest first.')
         layout = group.layout_root
         self.ledger_table = ReadOnlyTable(
-            ['When (UTC)', 'Action', 'Amount', 'Details'],
-            'The latest 100 recorded transactions, most recent first.',
+            ['When (UTC)', 'Action', 'From', 'To', 'Amount', 'Details'],
+            'All recorded transactions, most recent first. Scroll independently from the ownership trackers.',
         )
+        self.ledger_table.setMinimumWidth(270)
+        self.ledger_table.setWordWrap(True)
+        for column, width in enumerate((104, 75, 76, 76, 65)):
+            self.ledger_table.horizontalHeader().setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
+            self.ledger_table.setColumnWidth(column, width)
+        self.ledger_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
+        self.ledger_table.setColumnWidth(5, 180)
         layout.addWidget(self.ledger_table)
         return group
 
@@ -324,14 +652,27 @@ class MainWindow(QMainWindow):
         """Populate a read-only row without allowing edited game state."""
         for col, value in enumerate(values):
             item = QTableWidgetItem(str(value))
+            item.setToolTip(str(value))
             table.setItem(row, col, item)
 
-    def refresh(self) -> None:
+    def refresh(self, *, follow_turn: bool = False) -> None:
         """Recreate view data from the authoritative game session."""
         session = self.controller.session
+        self.property_trackers.refresh(session)
         has_game = session is not None
         self.save_action.setEnabled(has_game)
-        self.next_action.setEnabled(has_game)
+        dev_available = has_game and session.winner_id is None and session.auction is None
+        self.dev_shortcut.setEnabled(dev_available)
+        self.dev_action.setVisible(dev_available and self.controller.dev_tools_unlocked)
+        self.trade_action.setEnabled(has_game and session.auction is None and session.winner_id is None)
+        self.mortgages_action.setEnabled(has_game and session.auction is None and session.winner_id is None)
+        self.game_settings_action.setEnabled(has_game)
+        self.next_action.setEnabled(has_game and self.controller.engine.can_advance_turn())
+        self._refresh_quick_actions()
+        current_debts = (self.controller.engine.outstanding_payments(session.current_player.player_id)
+                         if has_game and session.current_player else [])
+        self.next_action.setToolTip('Pay outstanding rent or tax before advancing the turn' if current_debts
+            else 'Complete required rolls and movement before advancing the turn')
         self.landing_action.setEnabled(has_game)
         self.landing_action.setChecked(
             session.show_landing_prompts if session is not None else True
@@ -339,7 +680,8 @@ class MainWindow(QMainWindow):
         self.welcome_widget.setVisible(not has_game)
         self.dashboard_widget.setVisible(has_game)
         for button in self._action_buttons:
-            button.setEnabled(has_game)
+            button.setEnabled(has_game and session.winner_id is None)
+        self.player_account_button.setEnabled(has_game)
         self.player_picker.setEnabled(has_game)
         self.player_table.setEnabled(has_game)
         self.board_table.setEnabled(has_game)
@@ -354,9 +696,18 @@ class MainWindow(QMainWindow):
             self.player_focus.setText('Choose a player to see their wallet.')
             self.property_card.clear()
             self.activity_label.setVisible(False)
+            self.jail_roll_button.hide()
+            self.jail_bail_button.hide()
+            self.jail_card_button.hide()
+            self.payment_notice.hide()
+            self.pay_outstanding_button.hide()
             return
 
-        current_id = self.player_picker.currentData()
+        current_id = (
+            session.current_player.player_id
+            if follow_turn and session.current_player is not None
+            else self.player_picker.currentData()
+        )
         selected_row = self.board_table.currentRow()
         self.player_picker.blockSignals(True)
         self.player_picker.clear()
@@ -433,8 +784,7 @@ class MainWindow(QMainWindow):
                 # Use a readable badge-like colored name cell, not a tinted
                 # entire row that obscures the selected/active highlight.
                 cell = self.board_table.item(row, 1)
-                cell.setBackground(QBrush(shade))
-                cell.setForeground(QBrush(QColor('#ffffff' if shade.lightness() < 155 else '#151c1a')))
+                cell.setForeground(QBrush(shade.lighter(160) if self._dark_theme else shade.darker(150)))
         focus_row = (
             selected_row if 0 <= selected_row < len(board)
             else self._focused_property_index
@@ -444,15 +794,25 @@ class MainWindow(QMainWindow):
             self.board_table.selectRow(focus_row)
         self._update_property_card()
 
-        recent = list(reversed(session.transactions[-100:]))
+        recent = list(reversed(session.transactions))
         self.ledger_table.setRowCount(len(recent))
+        player_names = {player.player_id: player.name for player in session.players}
         for row, record in enumerate(recent):
+            sender, recipient = record.from_player_id, record.to_player_id
+            missing_side = 'Bank' if sender is not None or recipient is not None else '—'
+            from_name = player_names.get(sender, sender) if sender is not None else missing_side
+            to_name = player_names.get(recipient, recipient) if recipient is not None else missing_side
             self._fill(row, [
                 record.created_at.strftime('%Y-%m-%d %H:%M'),
                 record.kind.replace('_', ' ').title(),
+                from_name,
+                to_name,
                 f'${record.amount:,}',
                 record.description,
             ], self.ledger_table)
+        self.ledger_table.resizeRowsToContents()
+        for table in (self.player_table, self.board_table):
+            table.resizeColumnsToContents()
         self.setWindowTitle(f'{session.name} — MonopolPy Companion')
 
     def _update_player_focus(self, _index: int = -1) -> None:
@@ -465,6 +825,57 @@ class MainWindow(QMainWindow):
             self.player_focus.setText('Select a player')
             return
         player = self.controller.session.get_player(player_id)
+        debts = self.controller.engine.outstanding_payments(player_id)
+        self.payment_notice.setVisible(bool(debts))
+        self.pay_outstanding_button.setVisible(bool(debts))
+        self.pay_outstanding_button.setEnabled(bool(debts))
+        if debts:
+            lines = []
+            for debt in debts:
+                amount = f"${debt['amount']:,}" if debt['amount'] is not None else 'utility dice total required'
+                lines.append(f"{debt['kind'].title()} on {self.controller.session.board[debt['space_index']].name}: {amount}")
+            self.payment_notice.setText('Amount owed: ' + '; '.join(lines))
+        jailed_turn = (player.in_jail and player is self.controller.session.current_player
+                       and self.controller.session.winner_id is None)
+        self.jail_roll_button.setVisible(jailed_turn)
+        self.jail_bail_button.setVisible(jailed_turn)
+        self.jail_roll_button.setText(f'Roll for doubles ({player.jail_turns}/3 attempts)')
+        self.jail_roll_button.setEnabled(jailed_turn and self.controller.engine.can_roll_for_doubles(player_id))
+        self.jail_bail_button.setEnabled(jailed_turn and player.cash >= 50)
+        self.jail_card_button.setVisible(jailed_turn and player.get_out_of_jail_cards > 0)
+        self.jail_card_button.setEnabled(jailed_turn and player.jail_turns < 3 and
+            not any(self.controller.session.dice_rolls[i].get('source') == 'jail'
+                    for i in self.controller.session.turn_roll_indices))
+        can_roll = self.controller.engine.can_roll(player_id)
+        can_move = self.controller.engine.can_move_by_dice(player_id)
+        self.roll_button.setEnabled(can_roll)
+        self.roll_move_button.setEnabled(can_roll)
+        self.move_dice_button.setEnabled(can_move)
+        pending = None
+        if self.controller.session.turn_roll_indices:
+            pending = self.controller.session.dice_rolls[
+                self.controller.session.turn_roll_indices[-1]]
+        if jailed_turn:
+            if self.controller.session.turn_ended:
+                self.dice_result.setText('Sent to Jail. Advance the turn; attempt doubles on your next turn.')
+            elif player.jail_turns >= 3:
+                self.dice_result.setText('Third attempt used. Pay $50 bail to release and move by the saved roll.')
+            elif pending and pending.get('source') == 'jail':
+                self.dice_result.setText('No doubles. Advance the turn or pay $50 bail and move by this roll.')
+            else:
+                self.dice_result.setText('In Jail. Attempt doubles once this turn, or pay $50 bail before rolling.')
+        elif pending and not pending['used_for_move'] and pending['player_id'] == player_id:
+            self.die_one.setValue(pending['die_one'])
+            self.die_two.setValue(pending['die_two'])
+            self.dice_result.setText(f"Pending roll: {pending['die_one']} + {pending['die_two']}. Move before rolling again.")
+        elif debts:
+            self.dice_result.setText('Pay the outstanding rent or tax before continuing.')
+        elif not can_roll:
+            self.dice_result.setText('No roll available. Advance the turn or select the current player.')
+        else:
+            self.dice_result.setText('Roll available for the current player.')
+        self.die_one.setEnabled(can_roll)
+        self.die_two.setEnabled(can_roll)
         count = len(self.controller.session.owned_spaces_for(player_id))
         self.player_focus.setText(
             f'WALLET  ${player.cash:,}   •   {count} deed(s)'
@@ -544,7 +955,9 @@ class MainWindow(QMainWindow):
             self._focused_property_index = None
             self.activity_label.setVisible(False)
             self.controller.new_session(
-                dialog.game_name, dialog.player_names, dialog.starting_cash
+                dialog.game_name, dialog.player_names, dialog.starting_cash,
+                accounts=dialog.selected_accounts,
+                landing_prompts=self.settings.value('landing_alerts', True, type=bool),
             )
         except (OSError, ValueError) as exc:
             self._show_error('Could not start game', exc)
@@ -658,6 +1071,19 @@ class MainWindow(QMainWindow):
             return
         self._perform(action, player_id, space_index)
 
+    def _pay_outstanding(self):
+        player_id = self._selected_player_id()
+        debts = self.controller.engine.outstanding_payments(player_id)
+        if not debts:
+            return
+        options = {}
+        if debts[0]['amount'] is None:
+            total, accepted = QInputDialog.getInt(self, 'Utility rent', 'Dice total for this utility landing:', 7, 2, 12)
+            if not accepted:
+                return
+            options['dice_total'] = total
+        self._perform('pay_outstanding', player_id, **options)
+
     def _collect_rent(self) -> None:
         """Collect rent on a selected deed from the current active player."""
         try:
@@ -688,6 +1114,12 @@ class MainWindow(QMainWindow):
         if result is None:
             return False
         first, second = result
+        if self.controller.session.get_player(player_id).in_jail:
+            self.dice_result.setText(f'Rolled {first} + {second}: three doubles. Go directly to Jail; turn ended.')
+            self.statusBar().showMessage('Three doubles: sent directly to Jail without passing GO.', 10000)
+            self.board_table.selectRow(10)
+            self._update_property_card()
+            return False
         self.die_one.setValue(first)
         self.die_two.setValue(second)
         self.dice_result.setText(
@@ -730,15 +1162,24 @@ class MainWindow(QMainWindow):
         if owner is None:
             choice = QMessageBox.question(
                 self, 'Unowned property',
-                f'{space.name} is unowned. Buy it from the bank for ${space.price:,}?',
+                f'{space.name} is unowned. Buy it from the bank for ${space.price:,}? '
+                'Choose No to start an auction.',
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if choice == QMessageBox.StandardButton.Yes:
                 self._perform('purchase', player_id, space.index)
+            elif choice == QMessageBox.StandardButton.No and self.controller.session.purchase_offer == space.index:
+                self._perform('start_auction', player_id)
         elif owner.player_id != player_id:
             dice_total = self.die_one.value() + self.die_two.value()
             options = {'dice_total': dice_total} if space.space_type is SpaceType.UTILITY else {}
-            rent = self.controller.engine.rent_due(space.index, **options)
+            payment = next((item for item in self.controller.engine.outstanding_payments(player_id)
+                            if item['space_index'] == space.index and item['kind'] == 'rent'), None)
+            if payment is None:
+                return
+            rent = payment['amount']
+            if rent is None:
+                rent = dice_total * payment['utility_multiplier']
             if rent:
                 choice = QMessageBox.question(
                     self, 'Rent due',
@@ -748,6 +1189,19 @@ class MainWindow(QMainWindow):
                 )
                 if choice == QMessageBox.StandardButton.Yes:
                     self._perform('collect_rent', player_id, space.index, **options)
+
+    def _open_mortgage_planner(self, operation: str):
+        try:
+            player_id = self._selected_player_id()
+        except ValueError as exc:
+            self._show_error('Select player', exc)
+            return
+        if not self._unlock_player(player_id):
+            return
+        dialog = PlayerAccountDialog(self.controller, player_id, self)
+        dialog.select_mortgage_operation(operation)
+        dialog.exec()
+        self.refresh()
 
     def _open_account(self) -> None:
         """Prompt for PIN if locked, then open the account statistics dialog."""
@@ -771,6 +1225,38 @@ class MainWindow(QMainWindow):
             self._show_error('Could not save setting', exc)
         self.refresh()
 
+    def _open_dev_tools(self):
+        session = self.controller.session
+        if session is None or session.winner_id is not None or session.auction is not None:
+            return
+        if not self.controller.dev_tools_unlocked:
+            phrase, accepted = QInputDialog.getText(
+                self, 'Marauder’s Map', 'Speak the words to reveal the map.',
+                QLineEdit.EchoMode.Password,
+            )
+            if not accepted:
+                return
+            if not self.controller.unlock_dev_tools(phrase):
+                QMessageBox.information(self, 'Marauder’s Map', 'The map stays blank.')
+                return
+        self.refresh()
+        DevToolsDialog(self.controller, self.player_picker.currentData(), self).exec()
+        self.refresh()
+
+    def _trade(self):
+        if self.controller.session is None:
+            return
+        dialog = TradeDialog(self.controller, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        args = dialog.trade_args
+        if QMessageBox.question(self, 'Confirm trade', dialog.summary.text() + '\n\nCommit this exchange?') != QMessageBox.StandardButton.Yes:
+            return
+        for key in ('player_a_id', 'player_b_id'):
+            if not self._unlock_player(args[key]):
+                return
+        self._perform('trade', **args)
+
     def _transfer(self) -> None:
         """Open bank/player transfer dialog and submit it to GameEngine."""
         if self.controller.session is None:
@@ -780,6 +1266,28 @@ class MainWindow(QMainWindow):
             return
         self._perform('transfer', **dialog.transfer_args)
 
+    def _jail_roll(self):
+        player_id = self._selected_player_id()
+        result = self._perform('roll_for_doubles', player_id)
+        if result is None:
+            return
+        first, second = result['dice']
+        message = f'Jail roll: {first} + {second}.'
+        if result['bail_required']:
+            message += ' Third attempt: pay $50 bail to release and move by this roll.'
+        elif result['movement'] is None:
+            message += ' No doubles. Advance to the next turn.'
+        else:
+            message += ' Doubles! Released from Jail; no extra roll.'
+            self._handle_landing(player_id, result['movement'])
+        self.dice_result.setText(message)
+
+    def _jail_bail(self):
+        player_id = self._selected_player_id()
+        movement = self._perform('pay_jail_bail', player_id)
+        if movement is not None:
+            self._handle_landing(player_id, movement)
+
     def _release_from_jail(self) -> None:
         """Choose the permitted way to release a selected player."""
         try:
@@ -787,25 +1295,36 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             self._show_error('Select player', exc)
             return
-        choices = ['Pay $50 fine', 'Use Get Out of Jail Free card',
-                   'Rolled doubles (verified on physical dice)']
-        choice, accepted = QInputDialog.getItem(
-            self, 'Release from jail', 'Method:', choices, 0, False
-        )
-        if not accepted:
-            return
-        method = {'Pay $50 fine': 'fine',
-                  'Use Get Out of Jail Free card': 'card',
-                  'Rolled doubles (verified on physical dice)': 'doubles'}[choice]
-        self._perform('release_from_jail', player_id, method=method)
+        self._perform('release_from_jail', player_id, method='card')
 
     def _toggle_theme(self) -> None:
         """Switch the desktop palette without affecting game state."""
         self._dark_theme = not self._dark_theme
+        self.settings.setValue('dark', self._dark_theme)
         application = QApplication.instance()
         if application is not None:
             application.setStyleSheet(stylesheet(self._dark_theme))
         self.theme_action.setText('Light theme' if self._dark_theme else 'Dark theme')
+        self.refresh()
+
+    def _create_account(self):
+        NewAccountDialog(self.accounts, self).exec()
+
+    def _game_settings(self):
+        if self.controller.session is not None:
+            GameSettingsDialog(self.controller, self).exec()
+
+    def _settings(self):
+        if SettingsDialog(self.settings, self).exec() == QDialog.DialogCode.Accepted:
+            self._apply_preferences()
+
+    def _apply_preferences(self):
+        self._dark_theme = self.settings.value('dark', True, type=bool)
+        app = QApplication.instance()
+        app.setStyleSheet(stylesheet(self._dark_theme))
+        app.setProperty('sparkles', self.settings.value('sparkles', True, type=bool))
+        self.theme_action.setText('Light theme' if self._dark_theme else 'Dark theme')
+        self.refresh()
 
     def _show_error(self, title: str, error: Exception) -> None:
         """Display friendly errors instead of exposing a traceback in the GUI."""

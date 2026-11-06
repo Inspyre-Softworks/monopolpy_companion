@@ -13,7 +13,7 @@ from .theme import stylesheet
 from .fonts import body_font, load_user_font
 
 
-def run() -> int:
+def run(enabled_plugins: list[str] | None = None) -> int:
     """Launch the responsive desktop dashboard and return Qt's exit code."""
     application = QApplication.instance()
     owns_app = application is None
@@ -26,7 +26,7 @@ def run() -> int:
     application.setWindowIcon(make_app_icon())
     application.setOrganizationName('Inspyre Softworks')
     application.setStyleSheet(stylesheet(True))
-    window = MainWindow(SessionController())
+    window = MainWindow(SessionController(), enabled_plugins=enabled_plugins)
     window.show()
     if not owns_app:
         # Embedded Qt hosts already have their own event loop.

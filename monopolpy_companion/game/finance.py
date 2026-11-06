@@ -16,12 +16,18 @@ class MortgageQuote:
         space_indices: Checked and deduplicated owned property indices.
         line_items: Tuples of property name and amount.
         total: Total proceeds (mortgage) or payoff (unmortgage).
+        principal_total: Combined mortgage value of the selected deeds.
+        interest_total: Combined interest required to unmortgage these deeds.
+        payoff_total: Combined principal plus interest for the same deeds.
     """
 
     operation: str
     space_indices: tuple[int, ...]
     line_items: tuple[tuple[str, int], ...]
     total: int
+    principal_total: int = 0
+    interest_total: int = 0
+    payoff_total: int = 0
 
 
 class MortgageCalculator:
@@ -86,5 +92,8 @@ class MortgageCalculator:
                     raise ValueError(f'{space.name} is not currently mortgaged')
                 amount = space.mortgage_value + (space.mortgage_value + 9) // 10
             items.append((space.name, amount))
+        principal = sum(board[index].mortgage_value for index in space_indices)
+        interest = sum((board[index].mortgage_value + 9) // 10 for index in space_indices)
         return MortgageQuote(operation, tuple(space_indices), tuple(items),
-                             sum(amount for _name, amount in items))
+                             sum(amount for _name, amount in items),
+                             principal, interest, principal + interest)

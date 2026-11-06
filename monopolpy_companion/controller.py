@@ -41,6 +41,9 @@ class SessionController:
         'collect_rent', 'mortgage', 'unmortgage', 'buy_building',
         'sell_building', 'send_to_jail', 'release_from_jail', 'pay_tax',
         'mortgage_many', 'unmortgage_many', 'simulate_dice',
+        'roll_for_doubles', 'pay_jail_bail', 'pay_outstanding', 'trade',
+        'start_auction', 'bid_at_auction', 'pass_at_auction', 'declare_bankruptcy',
+        'dev_grant_cash', 'dev_grant_deed', 'dev_grant_building',
     })
 
     def __init__(
@@ -60,6 +63,7 @@ class SessionController:
         self._pending: list[GameEvent] = []
         self._unsubscribe_engine: Callable[[], None] | None = None
         self._unlocked_ids: set[str] = set()
+        self._dev_tools_unlocked = False
 
     def subscribe(self, handler: Observer) -> Callable[[], None]:
         """Subscribe to successful actions or session replacement."""
@@ -81,7 +85,8 @@ class SessionController:
                 self.logger.exception('Controller observer failed')
 
     def _drain(self) -> None:
-        events, self._pending = self._pending, []
+        events = list(self._pending)
+        self._pending.clear()
         for event in events:
             self._notify(event)
 
@@ -93,6 +98,7 @@ class SessionController:
             self._unsubscribe_engine()
         self.session = session
         self._unlocked_ids.clear()
+        self.lock_dev_tools()
         self.engine = GameEngine(session, logger=self.logger)
         self._unsubscribe_engine = self.engine.subscribe(self._pending.append)
         self._pending.clear()
@@ -100,12 +106,51 @@ class SessionController:
         return session
 
     def new_session(
-        self, name: str, player_names: list[str], starting_cash: int = 1500
+        self, name: str, player_names: list[str], starting_cash: int = 1500, *, accounts: dict | None = None,
+        landing_prompts: bool = True
     ) -> GameSession:
         """Create and save a new standard game before making it active."""
         session = create_standard_session(name, player_names, starting_cash)
+        session.show_landing_prompts = landing_prompts
+        for player in session.players:
+            account = (accounts or {}).get(player.name.casefold())
+            if account:
+                player.account_id = account.get('id')
+                player.pin_salt = account['data']['pin_salt']
+                player.pin_hash = account['data']['pin_hash']
         self.repository.save(session)
         return self.set_session(session)
+
+    def player_history(self, player_id: str):
+        """Return the live report and matching reports from distinct local saves."""
+        from .game.statistics import StatisticsService
+
+        session = self.session
+        if session is None:
+            raise ValueError('No active game')
+        player = session.get_player(player_id)
+        current = StatisticsService(session).for_player(player_id)
+        history = []
+        seen = {session.session_id}
+        for info in self.repository.list_sessions():
+            try:
+                saved = self.repository.load(info.path)
+                if saved.session_id in seen:
+                    continue
+                if player.account_id:
+                    matches = (candidate for candidate in saved.players
+                               if candidate.account_id == player.account_id)
+                else:
+                    matches = (candidate for candidate in saved.players if not candidate.account_id
+                               and candidate.name.casefold() == player.name.casefold())
+                match = next(matches, None)
+                if match is not None:
+                    report = StatisticsService(saved).for_player(match.player_id)
+                    history.append((saved.name, saved.created_at, report))
+                seen.add(saved.session_id)
+            except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError):
+                continue
+        return current, history
 
     def open_session(self, path: str) -> GameSession:
         """Load an existing save and install it as the active session."""
@@ -166,6 +211,67 @@ class SessionController:
         self.save()
         self._notify(GameEvent('settings_changed', {'show_landing_prompts': enabled}))
 
+    def set_go_salary(self, amount: int, *, double_on_go: bool | None = None,
+                      three_doubles_to_jail: bool | None = None,
+                      allow_rent_immunity: bool | None = None,
+                      immunity_follows_deed: bool | None = None) -> None:
+        """Persist the active game's salary in whole dollars; zero disables it."""
+        if self.session is None:
+            raise ValueError('No active session')
+        if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= 1000000:
+            raise ValueError('GO salary must be an integer between 0 and 1000000')
+        if double_on_go is not None and not isinstance(double_on_go, bool):
+            raise ValueError('Double salary must be a boolean')
+        if three_doubles_to_jail is not None and not isinstance(three_doubles_to_jail, bool):
+            raise ValueError('Three doubles rule must be a boolean')
+        immunity_settings = {
+            'allow_rent_immunity': allow_rent_immunity,
+            'immunity_follows_deed': immunity_follows_deed,
+        }
+        if any(value is not None and not isinstance(value, bool)
+               for value in immunity_settings.values()):
+            raise ValueError('Rent immunity rules must be boolean')
+        previous_immunity = {key: getattr(self.session.rules, key) for key in immunity_settings}
+        for key, value in immunity_settings.items():
+            if value is not None:
+                setattr(self.session.rules, key, value)
+        previous_three_doubles = self.session.rules.three_doubles_to_jail
+        previous_double = self.session.rules.double_salary_on_go
+        previous = self.session.rules.salary_on_go
+        updated = self.session.updated_at
+        self.session.rules.salary_on_go = amount
+        if three_doubles_to_jail is not None:
+            self.session.rules.three_doubles_to_jail = three_doubles_to_jail
+        if double_on_go is not None:
+            self.session.rules.double_salary_on_go = double_on_go
+        self.session.touch()
+        try:
+            self.save()
+        except OSError:
+            for key, value in previous_immunity.items():
+                setattr(self.session.rules, key, value)
+            self.session.rules.salary_on_go = previous
+            self.session.rules.three_doubles_to_jail = previous_three_doubles
+            self.session.rules.double_salary_on_go = previous_double
+            self.session.updated_at = updated
+            raise
+        self._notify(GameEvent('settings_changed', {'salary_on_go': amount}))
+
+    @property
+    def dev_tools_unlocked(self) -> bool:
+        return self._dev_tools_unlocked
+
+    def unlock_dev_tools(self, phrase: str) -> bool:
+        """Open the local game editor until the map is relocked or a game is replaced."""
+        normalized = ' '.join(phrase.casefold().split()).rstrip('.')
+        if (self.session is not None and self.session.winner_id is None
+                and normalized == 'i solemnly swear that i am up to no good'):
+            self._dev_tools_unlocked = True
+        return self._dev_tools_unlocked
+
+    def lock_dev_tools(self) -> None:
+        self._dev_tools_unlocked = False
+
     def perform(self, action: str, *args: Any, **kwargs: Any) -> Any:
         """Execute a validated game command and autosave its completed result.
 
@@ -185,10 +291,22 @@ class SessionController:
             raise ValueError('No active session')
         if action not in self.ACTIONS:
             raise ValueError(f'Unsupported game action: {action}')
+        dev_action = action.startswith('dev_')
+        if dev_action and not self.dev_tools_unlocked:
+            raise ValueError('The Marauder’s Map is locked')
+        if self.session.winner_id is not None:
+            raise ValueError('The game has ended')
+        if self.session.auction is not None and action not in {'bid_at_auction', 'pass_at_auction'}:
+            raise ValueError('Finish the active auction first')
+        if action == 'trade':
+            parties = [args[index] if len(args) > index else kwargs.get(key)
+                       for index, key in enumerate(('player_a_id', 'player_b_id'))]
+            if any(not self.is_player_unlocked(player_id) for player_id in parties):
+                raise PermissionError('Both players must authorize the trade with their PINs')
         secured = None
         if action == 'transfer':
             secured = kwargs.get('from_player_id')
-        elif action not in {'advance_turn'}:
+        elif not dev_action and action not in {'advance_turn', 'trade'}:
             secured = args[0] if args else kwargs.get('player_id')
         if secured is not None and not self.is_player_unlocked(secured):
             raise PermissionError('Player account is PIN locked')

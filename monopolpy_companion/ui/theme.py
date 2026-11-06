@@ -6,7 +6,7 @@ pill-less rectangular controls and oversaturated full-screen backgrounds.
 
 from __future__ import annotations
 
-from .fonts import display_family
+from .fonts import display_family, title_family
 
 
 _DARK = {
@@ -47,6 +47,9 @@ def stylesheet(dark: bool = True) -> str:
     """Return a responsive desktop stylesheet with distinct information levels."""
     t = _DARK if dark else _LIGHT
     heading_font = display_family().replace('"', '')
+    title = title_family()
+    title_weight = 400 if title == 'Metro Retro NF' else 900
+    title = title.replace('"', '')
     return f"""
     QWidget {{
         font-size: 12px;
@@ -56,6 +59,13 @@ def stylesheet(dark: bool = True) -> str:
     QMainWindow, QWidget#centralSurface {{
         background-color: {t['app']};
     }}
+    QToolTip {{
+        background-color: {t['surface']};
+        color: {t['text']};
+        border: 1px solid {t['line']};
+        padding: 5px 8px;
+    }}
+    QDialog#tradeDialog, QDialog#playerAccountDialog, QDialog#devToolsDialog {{ background-color: {t['app']}; }}
     QFrame#surface {{
         background-color: {t['surface']};
         border: 1px solid {t['line']};
@@ -73,9 +83,9 @@ def stylesheet(dark: bool = True) -> str:
     }}
     QLabel#headerTitle {{
         color: {t['text']};
-        font-family: "{heading_font}";
+        font-family: "{title}";
         font-size: 28px;
-        font-weight: 900;
+        font-weight: {title_weight};
         background: transparent;
     }}
     QLabel#eyebrow {{
@@ -106,6 +116,18 @@ def stylesheet(dark: bool = True) -> str:
         font-weight: 800;
         background: transparent;
     }}
+    QFrame#playerTracker {{
+        background-color: {t['surface']};
+        border: 1px solid {t['line']};
+        border-radius: 10px;
+    }}
+    QFrame#playerTracker[currentTurn="true"] {{
+        background-color: {t['highlight']};
+        border: 2px solid #e6bd4f;
+    }}
+    QFrame#playerTracker QLabel {{ border: none; background: transparent; }}
+    QLabel#trackerCash {{ font-size: 24px; font-weight: 750; color: {t['green']}; }}
+    QLabel#deedOwner {{ font-size: 17px; font-weight: 700; }}
     QLabel#activityBanner {{
         background-color: {t['highlight']};
         border: 1px solid {t['green_dark']};

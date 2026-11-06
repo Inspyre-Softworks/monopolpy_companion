@@ -11,6 +11,8 @@ from pathlib import Path
 
 from PySide6.QtGui import QFont, QFontDatabase
 
+from monopolpy_companion.lib.common.paths import APP_DATA_DIR
+
 _DISPLAY_FAMILIES = (
     'Kabel LT Std', 'Kabel LTStd', 'ITC Kabel', 'Kabel Heavy', 'Kabel',
     'Monopoly', 'League Spartan', 'Century Gothic', 'Avenir Next',
@@ -54,6 +56,21 @@ def body_font(point_size: int = 10) -> QFont:
 def display_family() -> str:
     """Expose the available display family for QSS style rules."""
     return _available_family(_DISPLAY_FAMILIES)
+
+def title_family() -> str:
+    """Load Metro Retro NF from the local fonts folder, with a system fallback."""
+    family = 'Metro Retro NF'
+    if family in QFontDatabase.families():
+        return family
+    path = APP_DATA_DIR / 'fonts' / 'MetroRetroNF.ttf'
+    if path.is_file():
+        font_id = QFontDatabase.addApplicationFont(str(path))
+        if font_id >= 0:
+            families = QFontDatabase.applicationFontFamilies(font_id)
+            if families:
+                return families[0]
+    return display_family()
+
 
 def load_user_font() -> bool:
     """Register an optional font file owned and licensed by the user.
