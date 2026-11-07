@@ -6,7 +6,11 @@ This controller is also reusable by terminals, tests, and other frontends.
 
 from __future__ import annotations
 
+import logging
+import os
+import tempfile
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from .game import (
@@ -15,6 +19,9 @@ from .game import (
 )
 
 Observer = Callable[[GameEvent], None]
+
+MAP_UNLOCK_PHRASE = 'I solemnly swear that I am up to no good.'
+MAP_LOCK_PHRASE = 'Mischief managed!'
 
 
 class SessionSaveError(OSError):
@@ -63,7 +70,7 @@ class SessionController:
         self._pending: list[GameEvent] = []
         self._unsubscribe_engine: Callable[[], None] | None = None
         self._unlocked_ids: set[str] = set()
-        self._dev_tools_unlocked = False
+        self._restore_dev_lock()
 
     def subscribe(self, handler: Observer) -> Callable[[], None]:
         """Subscribe to successful actions or session replacement."""
@@ -98,7 +105,7 @@ class SessionController:
             self._unsubscribe_engine()
         self.session = session
         self._unlocked_ids.clear()
-        self.lock_dev_tools()
+        self._restore_dev_lock()
         self.engine = GameEngine(session, logger=self.logger)
         self._unsubscribe_engine = self.engine.subscribe(self._pending.append)
         self._pending.clear()
@@ -261,16 +268,70 @@ class SessionController:
     def dev_tools_unlocked(self) -> bool:
         return self._dev_tools_unlocked
 
+    @staticmethod
+    def _dev_lock_path() -> Path:
+        return Path.home() / 'mm.lock'
+
+    def _restore_dev_lock(self) -> None:
+        self._dev_tools_unlocked = False
+        try:
+            expected = MAP_UNLOCK_PHRASE.encode('utf-8')
+            with self._dev_lock_path().open('rb') as handle:
+                contents = handle.read(len(expected) + 1)
+        except FileNotFoundError:
+            return
+        except OSError:
+            logging.getLogger(__name__).warning('Could not read the Marauder’s Map lock',
+                                                exc_info=True)
+            return
+        self._dev_tools_unlocked = contents == expected
+
+    def _write_dev_lock(self, state: str) -> None:
+        destination = self._dev_lock_path()
+        temporary: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode='w', encoding='utf-8', dir=destination.parent,
+                prefix='.mm.lock-', suffix='.tmp', delete=False,
+            ) as handle:
+                temporary = Path(handle.name)
+                handle.write(state)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, destination)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
     def unlock_dev_tools(self, phrase: str) -> bool:
-        """Open the local game editor until the map is relocked or a game is replaced."""
+        """Enable developer tools for the current game and persist the state.
+
+        Args:
+            phrase: Text submitted in the unlock dialog.
+
+        Returns:
+            Whether a valid phrase enabled developer tools for an unfinished game.
+
+        Raises:
+            OSError: The profile state could not be replaced.
+        """
         normalized = ' '.join(phrase.casefold().split()).rstrip('.')
-        if (self.session is not None and self.session.winner_id is None
-                and normalized == 'i solemnly swear that i am up to no good'):
-            self._dev_tools_unlocked = True
-        return self._dev_tools_unlocked
+        if (self.session is None or self.session.winner_id is not None
+                or normalized != MAP_UNLOCK_PHRASE.casefold().rstrip('.')):
+            return False
+        self._write_dev_lock(MAP_UNLOCK_PHRASE)
+        self._dev_tools_unlocked = True
+        return True
 
     def lock_dev_tools(self) -> None:
+        """Disable grants immediately and persist the locked state.
+
+        Raises:
+            OSError: The profile state could not be replaced. Grants remain
+                disabled in this controller until the state is restored.
+        """
         self._dev_tools_unlocked = False
+        self._write_dev_lock(MAP_LOCK_PHRASE)
 
     def perform(self, action: str, *args: Any, **kwargs: Any) -> Any:
         """Execute a validated game command and autosave its completed result.

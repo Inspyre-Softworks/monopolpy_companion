@@ -1,10 +1,13 @@
 [tool.poetry]
 name = "monopolpy_companion"
-version = "1.0.dev30"
+version = "1.0.dev33"
 description = "Electronic banker, game engine, and optional desktop GUI for physical Monopoly"
 authors = ["Taylor B. <43686206+tayjaybabee@users.noreply.github.com>"]
 readme = "README.md"
 packages = [{ include = "monopolpy_companion" }]
+include = [
+    { path = "monopolpy_companion/ui/resources", format = ["sdist", "wheel"] },
+]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.15"

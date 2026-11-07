@@ -7,6 +7,17 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Show the Marauder’s Map toolbar button at startup when developer mode is enabled in the profile.
+
+### Changed
+- Give the Marauder’s Map two custom parchment dialogs with bundled Caveat lettering and Source Sans 3 controls.
+- Replace the profile’s developer-mode state atomically when unlocking or relocking the Map.
+- Document Map access, profile state, font licenses, packaging, and verification.
+
+### Changed
+- Restore the Marauder’s Map from the profile’s mm.lock file and add a parchment introduction and visible phrase prompt.
+
 ### Added
 - Discover independently installed plugins and enable compatible extensions for the desktop session.
 

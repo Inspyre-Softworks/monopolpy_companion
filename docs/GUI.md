@@ -38,7 +38,8 @@ PIN controls, the dice simulator, financial reports and mortgage planning.
 The opening screen presents only **New Game** and **Open Game**; the dashboard
 appears after a session is selected. The board uses familiar title-card red,
 board green, ivory and property color groups. The app icon is generated from
-Qt shapes and does not bundle fonts or proprietary artwork.
+Qt shapes. See the [Marauder’s Map guide](MARAUDERS_MAP.md) for the separate
+parchment fonts and their licenses.
 
 
 1. Use **New game** to enter the session name and at least two players.
@@ -112,8 +113,7 @@ On Windows, run the same test without the display environment override.
 The distinctive lettering in the Monopoly logo is Kabel Heavy, a commercial
 font. MonopolPy uses Kabel automatically if it is already installed and
 detectable by Qt; otherwise it chooses a similarly geometric installed font
-before falling back to a readable system UI font. No commercial font binary is
-bundled.
+before falling back to a readable system UI font. The Qt dashboard does not require a commercial font binary.
 
 To load a legitimately licensed font from another location, set
 `MONOPOLPY_FONT_FILE` to a local TTF or OTF file before starting the GUI:

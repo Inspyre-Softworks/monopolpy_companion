@@ -4,6 +4,7 @@ import logging
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 try:
@@ -28,6 +29,10 @@ class QtGuiTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
+        self.map_lock = Path(self.directory.name) / 'mm.lock'
+        map_path = patch.object(SessionController, '_dev_lock_path', return_value=self.map_lock)
+        map_path.start()
+        self.addCleanup(map_path.stop)
         self.controller = SessionController(
             repository=SessionRepository(self.directory.name),
             logger=logging.getLogger('monopoly.qt.test'),
@@ -182,10 +187,13 @@ class QtGuiTests(unittest.TestCase):
         session = self.controller.new_session('Hidden map', ['Avery', 'Blake'])
         player = session.players[0]
         self.assertFalse(self.window.dev_action.isVisible())
-        with patch('monopolpy_companion.ui.main_window.QInputDialog.getText',
-                   return_value=('I solemnly swear that I am up to no good', True)):
-            with patch('monopolpy_companion.ui.main_window.DevToolsDialog.exec'):
-                self.window._open_dev_tools()
+        with patch.object(self.window, '_introduce_map', return_value=True) as introduction:
+            with patch.object(self.window, '_prompt_map_phrase',
+                              return_value='I solemnly swear that I am up to no good'):
+                with patch.object(DevToolsDialog, 'exec'):
+                    self.assertEqual(self.window.dev_shortcut.key().toString(), 'Ctrl+Shift+M')
+                    self.window.dev_shortcut.activated.emit()
+        introduction.assert_called_once_with()
         self.assertTrue(self.window.dev_action.isVisible())
         dialog = DevToolsDialog(self.controller, player.player_id, self.window)
         dialog.cash_button.click()
@@ -198,6 +206,20 @@ class QtGuiTests(unittest.TestCase):
         dialog._lock()
         self.window.refresh()
         self.assertFalse(self.window.dev_action.isVisible())
+        self.map_lock.write_text('I solemnly swear that I am up to no good.', encoding='utf-8')
+        restarted = SessionController(repository=self.controller.repository)
+        startup_window = MainWindow(restarted)
+        self.addCleanup(startup_window.close)
+        self.assertTrue(startup_window.dev_action.isVisible())
+        self.assertFalse(startup_window.dev_action.isEnabled())
+        self.controller.open_session(session.save_path)
+        self.assertTrue(self.window.dev_action.isVisible())
+        self.assertTrue(self.window.dev_action.isEnabled())
+        with patch.object(self.window, '_prompt_map_phrase') as prompt:
+            with patch.object(DevToolsDialog, 'exec') as show_map:
+                self.window.dev_action.trigger()
+        prompt.assert_not_called()
+        show_map.assert_called_once()
 
     def test_actions_disabled_without_game(self):
         self.assertFalse(self.window.save_action.isEnabled())

@@ -1,7 +1,7 @@
 """Monopoly-style typography with licensed-font-safe fallbacks.
 
 The logo typeface is Kabel Heavy. This module uses a locally installed Kabel
-font if the user has one, and never bundles proprietary font files.
+font if the user has one. The Map loads its separate Caveat resource.
 """
 
 from __future__ import annotations
@@ -76,8 +76,7 @@ def load_user_font() -> bool:
     """Register an optional font file owned and licensed by the user.
 
     The MONOPOLPY_FONT_FILE environment variable can point to an installed
-    or otherwise legitimately licensed TTF/OTF font. No font binary is
-    shipped with MonopolPy Companion.
+    or otherwise legitimately licensed TTF/OTF font.
 
     Returns:
         True when Qt successfully registered the given font file.

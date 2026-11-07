@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QSettings, QTimer
-from PySide6.QtGui import QAction, QColor, QBrush, QFont, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QColor, QBrush, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QFileDialog, QGridLayout, QLineEdit,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
@@ -26,6 +26,7 @@ from monopolpy_companion.game.accounts import AccountStore
 from monopolpy_companion.lib.common.paths import APP_DATA_DIR
 from .trade_dialog import TradeDialog
 from .dev_tools_dialog import DevToolsDialog
+from .map_unlock import _introduction, _phrase_entry
 from .property_tracker import PropertyTrackers
 from .widgets import TitleBar
 from .account_dialog import PlayerAccountDialog
@@ -663,7 +664,8 @@ class MainWindow(QMainWindow):
         self.save_action.setEnabled(has_game)
         dev_available = has_game and session.winner_id is None and session.auction is None
         self.dev_shortcut.setEnabled(dev_available)
-        self.dev_action.setVisible(dev_available and self.controller.dev_tools_unlocked)
+        self.dev_action.setVisible(self.controller.dev_tools_unlocked)
+        self.dev_action.setEnabled(dev_available)
         self.trade_action.setEnabled(has_game and session.auction is None and session.winner_id is None)
         self.mortgages_action.setEnabled(has_game and session.auction is None and session.winner_id is None)
         self.game_settings_action.setEnabled(has_game)
@@ -1230,18 +1232,29 @@ class MainWindow(QMainWindow):
         if session is None or session.winner_id is not None or session.auction is not None:
             return
         if not self.controller.dev_tools_unlocked:
-            phrase, accepted = QInputDialog.getText(
-                self, 'Marauder’s Map', 'Speak the words to reveal the map.',
-                QLineEdit.EchoMode.Password,
-            )
-            if not accepted:
+            if not self._introduce_map():
                 return
-            if not self.controller.unlock_dev_tools(phrase):
+            phrase = self._prompt_map_phrase()
+            if phrase is None:
+                return
+            try:
+                unlocked = self.controller.unlock_dev_tools(phrase)
+            except OSError as exc:
+                self._show_error('Could not write mm.lock', exc)
+                return
+            if not unlocked:
                 QMessageBox.information(self, 'Marauder’s Map', 'The map stays blank.')
                 return
         self.refresh()
         DevToolsDialog(self.controller, self.player_picker.currentData(), self).exec()
         self.refresh()
+
+    def _introduce_map(self) -> bool:
+        return _introduction(self).exec() == QDialog.DialogCode.Accepted
+
+    def _prompt_map_phrase(self) -> str | None:
+        prompt, editor = _phrase_entry(self)
+        return editor.text() if prompt.exec() == QDialog.DialogCode.Accepted else None
 
     def _trade(self):
         if self.controller.session is None:

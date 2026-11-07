@@ -115,5 +115,8 @@ class DevToolsDialog(QDialog):
         self._populate()
 
     def _lock(self):
-        self.controller.lock_dev_tools()
+        try:
+            self.controller.lock_dev_tools()
+        except OSError as exc:
+            QMessageBox.warning(self, 'Could not write mm.lock', str(exc))
         self.accept()

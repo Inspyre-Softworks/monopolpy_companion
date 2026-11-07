@@ -1,5 +1,11 @@
 # MonopolPy Companion
 
+The **Marauder’s Map** keeps developer grants out of the way during normal
+play. Open it with **Ctrl+Shift+M** to discover the two parchment dialogs.
+Once unlocked, its toolbar button appears at startup and becomes usable in
+eligible games. See the [Marauder’s Map guide](docs/MARAUDERS_MAP.md)
+for the phrases, profile state, and technical details.
+
 A reusable Python library for managing money, property ownership, movement,
 rent, mortgages, buildings, and save files while playing **physical Monopoly**.
 The optional PySide6 dashboard uses a board-inspired card layout with PIN-protected
