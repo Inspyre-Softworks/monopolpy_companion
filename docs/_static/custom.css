@@ -1,0 +1,27 @@
+article[role="main"] h1::after,
+article[role="main"] h2::after {
+    content: "";
+    display: block;
+    width: 3.5rem;
+    height: 0.2rem;
+    margin-top: 0.45rem;
+    border-radius: 999px;
+    background: var(--color-accent-red);
+}
+
+.sidebar-tree .current-page > .reference {
+    padding-left: calc(var(--sidebar-item-spacing-horizontal) - 0.2rem);
+    border-left: 0.2rem solid var(--color-brand-primary);
+    background: var(--color-highlight-on-target);
+}
+
+article[role="main"] .sd-card {
+    background-color: var(--color-background-secondary);
+    border-color: var(--color-background-border);
+    border-radius: 0.65rem;
+}
+
+article[role="main"] .sd-card:hover,
+article[role="main"] .sd-card:focus-within {
+    border-color: var(--color-brand-primary);
+}
