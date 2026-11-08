@@ -192,6 +192,31 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(24, 21, 24, 20)
         root.setSpacing(16)
 
+        hero = QFrame()
+        hero.setObjectName('hero')
+        hero_layout = QHBoxLayout(hero)
+        hero_layout.setContentsMargins(24, 18, 24, 18)
+        hero_layout.setSpacing(16)
+        headline = QVBoxLayout()
+        headline.setSpacing(4)
+        eyebrow = QLabel('THE ELECTRONIC BANKER  /  GAME NIGHT')
+        eyebrow.setObjectName('eyebrow')
+        headline.addWidget(eyebrow)
+        title = QLabel('MONOPOLPY')
+        title.setObjectName('headerTitle')
+        headline.addWidget(title)
+        brand_subtitle = QLabel(
+            'Start a session to keep every deed and dollar accounted for.'
+        )
+        brand_subtitle.setObjectName('subTitle')
+        headline.addWidget(brand_subtitle)
+        hero_layout.addLayout(headline, stretch=1)
+        brand_mark = QLabel('BUY  •  BUILD  •  COLLECT')
+        brand_mark.setObjectName('meta')
+        brand_mark.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        hero_layout.addWidget(brand_mark)
+        root.addWidget(hero)
+
         self.activity_label = QLabel('')
         self.activity_label.setObjectName('activityBanner')
         self.activity_label.setWordWrap(True)
@@ -823,7 +848,10 @@ class MainWindow(QMainWindow):
                 # Use a readable badge-like colored name cell, not a tinted
                 # entire row that obscures the selected/active highlight.
                 cell = self.board_table.item(row, 1)
-                cell.setForeground(QBrush(shade.lighter(160) if self._dark_theme else shade.darker(150)))
+                cell.setBackground(QBrush(shade))
+                cell.setForeground(QBrush(
+                    QColor('#ffffff' if shade.lightness() < 155 else '#151c1a')
+                ))
         focus_row = (
             selected_row if 0 <= selected_row < len(board)
             else self._focused_property_index
