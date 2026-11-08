@@ -6,10 +6,12 @@ presentation data only; game rules always remain in the headless engine.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
+    QApplication,
     QAbstractItemView, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QVBoxLayout, QWidget,
+    QSizePolicy, QTableWidget, QVBoxLayout, QWidget,
 )
 
 from .fonts import display_font
@@ -32,6 +34,43 @@ class HelpButton(QPushButton):
         self.setAccessibleDescription(help_text)
         self.setMinimumHeight(42)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        if not hasattr(self, '_glow_timer'):
+            self._phase = 0
+            self._glow_timer = QTimer(self)
+            self._glow_timer.setInterval(45)
+            self._glow_timer.timeout.connect(self._animate_glow)
+        if QApplication.instance().property('sparkles') is not False:
+            self._glow_timer.start()
+
+    def _animate_glow(self):
+        self._phase = (self._phase + 1) % 40
+        self.update()
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        if hasattr(self, '_glow_timer'):
+            self._glow_timer.stop()
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not hasattr(self, '_glow_timer') or not self._glow_timer.isActive():
+            return
+        if QApplication.instance().property('sparkles') is False:
+            self._glow_timer.stop()
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor(115, 240, 190, 100 + abs(20-self._phase)*5), 2))
+        painter.drawRoundedRect(self.rect().adjusted(2, 2, -2, -2), 9, 9)
+        x = 10 + int((self.width()-20)*self._phase/40)
+        painter.setPen(QPen(QColor('#eaffcc'), 2))
+        painter.drawLine(x-3, 4, x+3, 4)
+        painter.drawLine(x, 1, x, 7)
 
 
 class ReadOnlyTable(QTableWidget):
@@ -167,3 +206,55 @@ class PropertyDetailCard(QFrame):
             'Select a property', None, price=None, rent_label='',
             details='Choose a board row to see its price and ownership.',
         )
+
+
+class TitleBar(QFrame):
+    """Theme-aware caption using native system move and resize operations."""
+
+    def __init__(self, window):
+        super().__init__(window)
+        self.window = window
+        from PySide6.QtWidgets import QSizeGrip
+        self.resize_grip = QSizeGrip(window)
+        window.statusBar().addPermanentWidget(self.resize_grip)
+        self.setObjectName('hero')
+        layout = QHBoxLayout(self)
+        controls = QWidget()
+        control_layout = QHBoxLayout(controls)
+        control_layout.setContentsMargins(0, 0, 0, 0)
+        icon = QLabel()
+        icon.setPixmap(window.windowIcon().pixmap(20, 20))
+        icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(icon)
+        label = QLabel(window.windowTitle())
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        window.windowTitleChanged.connect(label.setText)
+        label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(label, stretch=1)
+        for text, tip, handler in [('_', 'Minimize', window.showMinimized),
+                ('[]', 'Maximize or restore', self._maximize),
+                ('X', 'Close', window.close)]:
+            button = QPushButton(text)
+            button.setAccessibleName(tip)
+            button.setToolTip(tip)
+            button.setFixedWidth(46)
+            button.clicked.connect(handler)
+            control_layout.addWidget(button)
+        icon.setFixedWidth(controls.sizeHint().width())
+        layout.addWidget(controls)
+
+    def _maximize(self):
+        if self.window.isMaximized():
+            self.window.showNormal()
+        else:
+            self.window.showMaximized()
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._maximize()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self.window.windowHandle():
+            self.window.windowHandle().startSystemMove()

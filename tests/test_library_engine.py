@@ -15,6 +15,66 @@ from monopolpy_companion.game import SessionRepository as SessionRepositoryFromG
 class GameEngineTests(unittest.TestCase):
     """Test the banker and game rules without a desktop or logging dependency."""
 
+    def test_go_salary_exact_landing_passing_and_exceptions(self):
+        self.session.rules.salary_on_go = 300
+        for start, spaces, double, collect, expected in [
+            (39, 1, False, True, 300), (39, 1, True, True, 600),
+            (39, 2, True, True, 300), (39, 1, True, False, 0),
+            (0, 0, True, True, 0), (25, 5, True, True, 0),
+        ]:
+            with self.subTest(start=start, spaces=spaces, double=double, collect=collect):
+                self.taylor.in_jail = False
+                self.taylor.position = start
+                self.session.rules.double_salary_on_go = double
+                before = self.taylor.cash
+                count = len(self.session.transactions)
+                self.engine.move(self.taylor.player_id, spaces, collect_go=collect)
+                self.assertEqual(self.taylor.cash - before, expected)
+                if expected:
+                    self.assertEqual(self.session.transactions[count].amount, expected)
+        self.taylor.in_jail = False
+        self.taylor.position = 39
+        self.session.rules.salary_on_go = 0
+        before = self.taylor.cash
+        self.engine.move(self.taylor.player_id, 1)
+        self.assertEqual(self.taylor.cash, before)
+
+    def test_roll_limit_doubles_and_pending_dice(self):
+        from unittest.mock import patch
+        player_id = self.taylor.player_id
+        with patch('secrets.randbelow', side_effect=[0, 0, 0, 1]):
+            self.assertEqual(self.engine.simulate_dice(player_id), (1, 1))
+            before = self.session.to_dict()
+            with self.assertRaises(ValueError):
+                self.engine.simulate_dice(player_id)
+            with self.assertRaises(ValueError):
+                self.engine.move_by_dice(player_id, 2, 3)
+            self.assertEqual(self.session.to_dict(), before)
+            self.engine.move_by_dice(player_id, 1, 1)
+            self.assertTrue(self.engine.can_roll(player_id))
+            self.assertEqual(self.engine.simulate_dice(player_id), (1, 2))
+            self.engine.move_by_dice(player_id, 1, 2)
+        self.assertFalse(self.engine.can_roll(player_id))
+        self.assertFalse(self.engine.can_move_by_dice(player_id))
+        before = self.session.to_dict()
+        with self.assertRaises(ValueError):
+            self.engine.move_by_dice(player_id, 2, 2)
+        self.assertEqual(self.session.to_dict(), before)
+        self.engine.advance_turn()
+        self.assertTrue(self.engine.can_roll(self.dave.player_id))
+        with self.assertRaises(ValueError):
+            self.engine.simulate_dice(player_id)
+
+    def test_manual_roll_limit_survives_reopening(self):
+        self.engine.move_by_dice(self.taylor.player_id, 1, 2)
+        with tempfile.TemporaryDirectory() as directory:
+            repository = SessionRepository(directory)
+            path = repository.save(self.session)
+            restored = GameEngine(repository.load(path))
+            self.assertFalse(restored.can_roll(self.taylor.player_id))
+            with self.assertRaises(ValueError):
+                restored.simulate_dice(self.taylor.player_id)
+
     def test_package_root_exports_match_game_subpackage(self) -> None:
         self.assertIs(GameEngine, GameEngineFromGame)
         self.assertIs(SessionRepository, SessionRepositoryFromGame)
@@ -113,6 +173,7 @@ class GameEngineTests(unittest.TestCase):
 
     def test_advance_skips_bankrupt(self) -> None:
         self.dave.bankrupt = True
+        self.engine.move_by_dice(self.taylor.player_id, 1, 2)
         self.assertIs(self.engine.advance_turn(), self.taylor)
 
     def test_atomic_repository_round_trip_and_legacy_schema(self) -> None:

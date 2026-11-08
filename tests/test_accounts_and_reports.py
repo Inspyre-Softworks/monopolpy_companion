@@ -23,6 +23,47 @@ class PlayerAccountsTests(unittest.TestCase):
         self.session = self.controller.new_session('Accounts', ['Avery', 'Blake'])
         self.avery, self.blake = self.session.players
 
+    def test_overall_report_uses_account_identity_and_counts_unique_games(self):
+        account = {'id': 'account-avery', 'data': {'pin_salt': '', 'pin_hash': ''}}
+        first = self.controller.new_session('First', ['Avery', 'Blake'], accounts={'avery': account})
+        first_id = first.players[0].player_id
+        self.controller.perform('move_by_dice', first_id, 1, 1)
+        self.controller.perform('move_by_dice', first_id, 2, 2)
+        self.controller.perform('transfer', 20, from_player_id=first_id,
+                                to_player_id=first.players[1].player_id, kind='rent', space_index=3)
+        first.turn_counts[first_id] = 3
+        first.winner_id = first_id
+        self.controller.save()
+        self.repo.save(first, self.repo.directory / 'duplicate.json')
+        self.controller.new_session('Same name guest', ['Avery', 'Blake'])
+        active = self.controller.new_session('Renamed account', ['Avery Jr', 'Blake'],
+                                             accounts={'avery jr': account})
+        active_id = active.players[0].player_id
+        self.controller.perform('move_by_dice', active_id, 5, 6)
+        self.controller.perform('transfer', 12, from_player_id=active_id,
+                                to_player_id=active.players[1].player_id, kind='rent', space_index=3)
+        current, history = self.controller.player_history(active_id)
+        self.assertEqual([entry[0] for entry in history], ['First'])
+        overall = StatisticsService.overall(current, [entry[2] for entry in history])
+        self.assertEqual(overall.gameplay.games_played, 2)
+        self.assertEqual(overall.gameplay.games_completed, 1)
+        self.assertEqual(overall.gameplay.games_won, 1)
+        self.assertEqual(overall.gameplay.dice_rolls, 3)
+        self.assertAlmostEqual(overall.gameplay.average_dice_total, 17 / 3)
+        self.assertEqual(overall.finance.rent_paid_by_property, {'Baltic Avenue': 32})
+        self.assertEqual(overall.finance.average_rent_paid_per_turn, 8)
+        self.assertEqual(current.finance.rent_paid, 12)
+
+    def test_guest_history_matches_unlinked_names_case_insensitively(self):
+        self.avery.bankrupt = True
+        self.controller.save()
+        active = self.controller.new_session('Guest again', ['AVERY', 'Casey'])
+        current, history = self.controller.player_history(active.players[0].player_id)
+        self.assertEqual(len(history), 1)
+        overall = StatisticsService.overall(current, [history[0][2]])
+        self.assertEqual(overall.gameplay.games_played, 2)
+        self.assertEqual(overall.gameplay.bankruptcies, 1)
+
     def test_pin_is_hashed_and_authorization_is_required(self) -> None:
         self.controller.set_player_pin(self.avery.player_id, '1234')
         account = PlayerAccount(self.avery)
@@ -70,6 +111,22 @@ class PlayerAccountsTests(unittest.TestCase):
         self.assertEqual(engine.mortgage_quote(self.avery.player_id, [1, 3]).total, 66)
         self.controller.perform('unmortgage_many', self.avery.player_id, [1, 3])
         self.assertFalse(self.session.property_states[1].mortgaged)
+
+    def test_bulk_quote_includes_proceeds_interest_and_future_payoff(self):
+        for index in (1, 3, 12):
+            self.controller.perform('purchase', self.avery.player_id, index)
+        before = self.session.to_dict()
+        quote = self.controller.engine.mortgage_quote(self.avery.player_id, [1, 3, 12], 'mortgage')
+        self.assertEqual(quote.total, 135)
+        self.assertEqual(quote.principal_total, 135)
+        self.assertEqual(quote.interest_total, 14)
+        self.assertEqual(quote.payoff_total, 149)
+        self.assertEqual(self.session.to_dict(), before)
+        self.controller.perform('mortgage_many', self.avery.player_id, [1, 3, 12])
+        payoff = self.controller.engine.mortgage_quote(self.avery.player_id, [1, 3, 12], 'unmortgage')
+        self.assertEqual(payoff.total, quote.payoff_total)
+        self.assertEqual(payoff.principal_total, 135)
+        self.assertEqual(payoff.interest_total, 14)
 
     def test_mixed_invalid_mortgage_selection_is_atomic(self) -> None:
         self.controller.perform('purchase', self.avery.player_id, 1)

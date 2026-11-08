@@ -35,15 +35,19 @@ The GUI is not required for `from monopolpy_companion import GameEngine`.
 See [Player accounts and statistics](ACCOUNTS_AND_STATISTICS.md) for
 PIN controls, the dice simulator, financial reports and mortgage planning.
 
-The opening screen presents only **New Game** and **Open Game**; the dashboard
-appears after a session is selected. The board uses familiar title-card red,
+The opening screen offers **New Game**, **Open Game**, and **Create Account**.
+Opening a game centers its name in the title bar and selects **This Turn**.
+That tab shows the current player, available turn actions, and player balances.
+Use **Board** for ownership and deeds, **Players** for banking and physical dice,
+and **Ledger** for transaction history. The board uses familiar title-card red,
 board green, ivory and property color groups. The app icon is generated from
-Qt shapes and does not bundle fonts or proprietary artwork.
+Qt shapes. See the [Marauder’s Map guide](MARAUDERS_MAP.md) for the separate
+parchment fonts and their licenses.
 
 
 1. Use **New game** to enter the session name and at least two players.
    The new session saves immediately.
-2. Select the acting player in the left-hand selector.
+2. Select the acting player on the **Players** tab for manual actions.
 3. Use the two dice controls to enter the **actual** physical dice roll;
    **Move by dice** updates board position and GO salary.
 4. To buy a property, select its row in the **Board & properties** table
@@ -59,9 +63,10 @@ Qt shapes and does not bundle fonts or proprietary artwork.
    **Open** restores an existing JSON session.
 9. Open **Player account** for a PIN, statistics or multi-deed mortgage quote.
 10. Use **Roll dice** to simulate a roll, or **Roll + move** to roll and move.
-    The board selects the landed space. **Landing alerts** controls whether
-    purchase/rent dialogs appear and is saved per session.
-11. Switch between dark and light colors with the named theme button.
+   The board selects the landed space. **This Turn** offers purchase and rent
+   actions inline. **Game → Landing alerts** controls popups on the other tabs
+   and is saved per session.
+11. Switch between dark and light colors from the **Game** menu.
 
 All important actions use visible text labels and tooltips; there are no
 unlabeled icon-only controls. Screen-reader descriptions are set on custom
@@ -112,19 +117,18 @@ On Windows, run the same test without the display environment override.
 The distinctive lettering in the Monopoly logo is Kabel Heavy, a commercial
 font. MonopolPy uses Kabel automatically if it is already installed and
 detectable by Qt; otherwise it chooses a similarly geometric installed font
-before falling back to a readable system UI font. No commercial font binary is
-bundled.
+before falling back to a readable system UI font. The Qt dashboard does not require a commercial font binary.
 
-To load a legitimately licensed font from another location, set
-`MONOPOLPY_FONT_FILE` to a local TTF or OTF file before starting the GUI:
+If Monopoly Sans (or Monopoly) is installed, the GUI uses it for regular
+text, including buttons and tables. To use a font file for regular text
+without installing it system-wide, set `MONOPOLPY_FONT_FILE` before launch:
 
 ```powershell
-$env:MONOPOLPY_FONT_FILE = 'C:\\Fonts\\Kabel-Heavy.otf'
+$env:MONOPOLPY_FONT_FILE = 'C:\Fonts\Monopoly.ttf'
 poetry run monopolpy-companion --gui
 ```
 
-The redesigned dashboard has a branded header, clean surface cards and a
-persistent selected-deed preview. After purchase, it selects the acquired
+After purchase, the dashboard selects the acquired
 property, shows the current owner and rent, updates the player's wallet, and
 displays a confirmation with the exact paid amount and remaining balance.
 Both purchase paths (manual buy and a purchase decision after dice movement)

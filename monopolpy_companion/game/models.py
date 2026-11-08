@@ -52,6 +52,7 @@ class Player:
     bankrupt: bool = False
     pin_salt: str = ""
     pin_hash: str = ""
+    account_id: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -66,6 +67,7 @@ class Player:
             "bankrupt": self.bankrupt,
             "pin_salt": self.pin_salt,
             "pin_hash": self.pin_hash,
+            "account_id": self.account_id,
         }
 
     @classmethod
@@ -130,11 +132,19 @@ class GameRules:
     starting_cash: int = 1500
     salary_on_go: int = 200
     free_parking_collects_fees: bool = False
+    double_salary_on_go: bool = False
+    three_doubles_to_jail: bool = True
+    allow_rent_immunity: bool = False
+    immunity_follows_deed: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "starting_cash": self.starting_cash,
             "salary_on_go": self.salary_on_go,
+            "double_salary_on_go": self.double_salary_on_go,
+            "three_doubles_to_jail": self.three_doubles_to_jail,
+            "allow_rent_immunity": self.allow_rent_immunity,
+            "immunity_follows_deed": self.immunity_follows_deed,
             "free_parking_collects_fees": self.free_parking_collects_fees,
         }
 
@@ -161,6 +171,14 @@ class GameSession:
     dice_rolls: list[dict[str, Any]] = field(default_factory=list)
     movement_history: list[dict[str, Any]] = field(default_factory=list)
     save_path: Optional[str] = field(default=None, repr=False, compare=False)
+    turn_roll_indices: list[int] = field(default_factory=list)
+    turn_ended: bool = False
+    landing_payments: list[dict[str, Any]] = field(default_factory=list)
+    rent_immunity: list[dict[str, Any]] = field(default_factory=list)
+    purchase_offer: Optional[int] = None
+    auction: Optional[dict[str, Any]] = None
+    bankruptcy_auctions: list[int] = field(default_factory=list)
+    winner_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not self.turn_counts and self.players:
@@ -338,6 +356,14 @@ class GameSession:
             "turn_counts": self.turn_counts,
             "dice_rolls": self.dice_rolls,
             "movement_history": self.movement_history,
+            "turn_roll_indices": self.turn_roll_indices,
+            "turn_ended": self.turn_ended,
+            "landing_payments": self.landing_payments,
+            "rent_immunity": self.rent_immunity,
+            "purchase_offer": self.purchase_offer,
+            "auction": self.auction,
+            "bankruptcy_auctions": self.bankruptcy_auctions,
+            "winner_id": self.winner_id,
         }
 
     @classmethod

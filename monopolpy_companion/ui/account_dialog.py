@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGroupBox,
     QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMessageBox, QPushButton, QTabWidget, QTextEdit,
-    QVBoxLayout, QWidget,
+    QVBoxLayout, QWidget, QScrollArea, QFrame,
 )
 
 from monopolpy_companion.controller import SessionController, SessionSaveError
 from monopolpy_companion.game import PlayerAccount, StatisticsService
+
+from .property_tracker import GROUP_COLORS, property_group
 
 
 class PlayerAccountDialog(QDialog):
@@ -29,6 +32,7 @@ class PlayerAccountDialog(QDialog):
 
     def __init__(self, controller: SessionController, player_id: str, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName('playerAccountDialog')
         self.controller = controller
         self.player_id = player_id
         self.setWindowTitle(f'Player account: {self.player.name}')
@@ -38,6 +42,10 @@ class PlayerAccountDialog(QDialog):
 
         self.heading = QLabel()
         root.addWidget(self.heading)
+        self.stats_scope = QComboBox()
+        self.stats_scope.setAccessibleName('Statistics scope')
+        self.stats_scope.setToolTip('Choose this game, a saved game, or overall totals from local saves.')
+        root.addWidget(self.stats_scope)
         self.tabs = QTabWidget()
         root.addWidget(self.tabs, stretch=1)
 
@@ -48,7 +56,12 @@ class PlayerAccountDialog(QDialog):
             'Financial', 'Cash movements and rent broken down by player and property.'
         )
         root.addWidget(self._security_bar())
-        self.tabs.addTab(self._build_mortgages(), 'Mortgages')
+        self.mortgage_tab = self._build_mortgages()
+        self.tabs.addTab(self.mortgage_tab, 'Mortgages')
+        self.tabs.currentChanged.connect(
+            lambda: self.stats_scope.setVisible(self.tabs.currentWidget() is not self.mortgage_tab)
+        )
+        self.stats_scope.currentIndexChanged.connect(self._render_statistics)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)
@@ -100,11 +113,18 @@ class PlayerAccountDialog(QDialog):
         layout.addWidget(self.operation)
         self.properties = QListWidget()
         self.properties.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-        self.properties.setToolTip('Ctrl-click to select multiple deed rows.')
+        self.properties.setToolTip('Click each owned deed to add or remove it from the selection.')
         layout.addWidget(self.properties)
         self.quote_label = QLabel('Select one or more properties for a quote.')
         self.quote_label.setWordWrap(True)
-        layout.addWidget(self.quote_label)
+        self.quote_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        quote_scroll = QScrollArea()
+        quote_scroll.setWidgetResizable(True)
+        quote_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        quote_scroll.setMinimumHeight(155)
+        quote_scroll.setMaximumHeight(240)
+        quote_scroll.setWidget(self.quote_label)
+        layout.addWidget(quote_scroll)
         buttons = QHBoxLayout()
         calculate = QPushButton('Calculate total')
         calculate.setToolTip('Preview the amount without changing the game.')
@@ -117,6 +137,7 @@ class PlayerAccountDialog(QDialog):
         buttons.addWidget(apply)
         layout.addLayout(buttons)
         self.operation.currentIndexChanged.connect(self._populate_properties)
+        self.properties.itemSelectionChanged.connect(self._calculate)
         return panel
 
     def _selected_indices(self) -> list[int]:
@@ -127,6 +148,7 @@ class PlayerAccountDialog(QDialog):
     def _populate_properties(self) -> None:
         """Show only currently eligible deeds for the chosen operation."""
         operation = self.operation.currentData()
+        self.properties.blockSignals(True)
         self.properties.clear()
         for space in self.controller.session.owned_spaces_for(self.player_id):
             state = self.controller.session.get_property_state(space.index)
@@ -136,9 +158,20 @@ class PlayerAccountDialog(QDialog):
             if operation == 'unmortgage':
                 amount += (amount + 9) // 10
             entry = QListWidgetItem(f'{space.name} — ${amount:,}')
+            group = property_group(space)
+            color = GROUP_COLORS.get(group)
+            if color:
+                swatch = QPixmap(14, 14)
+                swatch.fill(QColor('#929c98'))
+                with QPainter(swatch) as painter:
+                    painter.fillRect(1, 1, 12, 12, QColor(color))
+                entry.setIcon(QIcon(swatch))
+                entry.setToolTip(f'{space.name} ({group})')
             entry.setData(Qt.ItemDataRole.UserRole, space.index)
             self.properties.addItem(entry)
+        self.properties.blockSignals(False)
         self.quote_label.setText('Select one or more properties for a quote.')
+        self.apply_button.setEnabled(False)
         self.apply_button.setText(
             'Unmortgage selected' if operation == 'unmortgage' else 'Mortgage selected'
         )
@@ -149,17 +182,52 @@ class PlayerAccountDialog(QDialog):
             self.player_id, self._selected_indices(), self.operation.currentData()
         )
 
+    def select_mortgage_operation(self, operation: str) -> None:
+        """Open the planner directly in mortgage or unmortgage mode."""
+        index = self.operation.findData(operation)
+        if index < 0:
+            raise ValueError('Invalid mortgage operation')
+        self.operation.setCurrentIndex(index)
+        self.tabs.setCurrentWidget(self.mortgage_tab)
+
+    def _quote_summary(self, quote) -> str:
+        details = []
+        for index, (name, amount) in zip(quote.space_indices, quote.line_items):
+            principal = self.controller.session.board[index].mortgage_value
+            interest = (principal + 9) // 10
+            if quote.operation == 'mortgage':
+                details.append(f'{name}: receive ${principal:,}; unmortgage later ${principal + interest:,}')
+            else:
+                details.append(f'{name}: repay ${amount:,} (${principal:,} principal + ${interest:,} interest)')
+        lines = []
+        if quote.operation == 'mortgage':
+            lines.extend([f'\nCash received now: ${quote.total:,}',
+                          f'Total to unmortgage these same properties later: ${quote.payoff_total:,}',
+                          f'Principal: ${quote.principal_total:,} | Interest: ${quote.interest_total:,}'])
+            balance = self.player.cash + quote.total
+        else:
+            lines.extend([f'\nTotal to unmortgage now: ${quote.payoff_total:,}',
+                          f'Principal: ${quote.principal_total:,} | Interest: ${quote.interest_total:,}',
+                          f'Mortgage value of these properties: ${quote.principal_total:,}'])
+            balance = self.player.cash - quote.total
+        lines.extend([f'Current cash: ${self.player.cash:,}', f'Cash after applying: ${balance:,}'])
+        if balance < 0:
+            lines.append('Insufficient cash: reduce the selection or raise funds first.')
+        lines.append('\nSelected properties:')
+        lines.extend(details)
+        return '\n'.join(lines)
+
     def _calculate(self) -> None:
-        """Show itemized totals without committing changes."""
+        """Update the live preview before allowing a batch to be committed."""
+        self.apply_button.setEnabled(False)
         try:
             quote = self._quote()
         except (ValueError, KeyError) as exc:
-            QMessageBox.warning(self, 'Cannot calculate', str(exc))
+            self.quote_label.setText(str(exc))
             return
-        lines = [f'{name}: ${amount:,}' for name, amount in quote.line_items]
-        lines.append(f'\nTOTAL: ${quote.total:,}')
-        lines.append(f'Available cash: ${self.player.cash:,}')
-        self.quote_label.setText('\n'.join(lines))
+        self.quote_label.setText(self._quote_summary(quote))
+        self.apply_button.setEnabled(self.controller.session.winner_id is None and
+                                     (quote.operation == 'mortgage' or quote.total <= self.player.cash))
 
     def _apply(self) -> None:
         """Execute a full selected batch after a verified quote."""
@@ -174,14 +242,13 @@ class PlayerAccountDialog(QDialog):
             return
         if QMessageBox.question(
             self, 'Confirm property transactions',
-            f'{quote.operation.title()} {len(quote.space_indices)} properties '
-            f'for a total of ${quote.total:,}?'
+            self._quote_summary(quote) + f'\n\n{quote.operation.title()} these {len(quote.space_indices)} properties?'
         ) != QMessageBox.StandardButton.Yes:
             return
         method = 'mortgage_many' if quote.operation == 'mortgage' else 'unmortgage_many'
         try:
             self.controller.perform(method, self.player_id, list(quote.space_indices))
-        except (SessionSaveError, PermissionError, ValueError, KeyError) as exc:
+        except (OSError, PermissionError, ValueError, KeyError) as exc:
             QMessageBox.warning(self, 'Cannot apply changes', str(exc))
             return
         self.refresh()
@@ -230,14 +297,42 @@ class PlayerAccountDialog(QDialog):
 
     def refresh(self) -> None:
         """Reload player stats, cash, PIN status and mortgage selections."""
-        report = StatisticsService(self.controller.session).for_player(self.player_id)
-        p = report.gameplay
-        f = report.finance
+        report, history = self.controller.player_history(self.player_id)
+        selected = self.stats_scope.currentIndex()
+        self.stats_scope.blockSignals(True)
+        self.stats_scope.clear()
+        self.stats_scope.addItem('This game', report)
+        self.stats_scope.addItem('Overall', StatisticsService.overall(report, [entry[2] for entry in history]))
+        for name, created_at, saved_report in history:
+            self.stats_scope.addItem(f'{name} ({created_at:%Y-%m-%d %H:%M})', saved_report)
+        self.stats_scope.setCurrentIndex(max(0, min(selected, self.stats_scope.count() - 1)))
+        self.stats_scope.blockSignals(False)
+        self._render_statistics()
         self.heading.setText(
-            f'{report.name}  •  Cash ${report.cash:,}  •  '
+            f'{report.name}  •  Current game cash ${report.cash:,}  •  '
             f'Currently owns {report.owned_properties} deeds'
         )
-        self.gameplay_text.setPlainText('\n'.join([
+        account = PlayerAccount(self.player)
+        self.pin_status.setText(
+            'PIN locked' if account.is_locked else 'No PIN set'
+        )
+        self._populate_properties()
+
+    def _render_statistics(self) -> None:
+        report = self.stats_scope.currentData()
+        if report is None:
+            return
+        p = report.gameplay
+        f = report.finance
+        balances = []
+        if self.stats_scope.currentIndex() != 1:
+            balances = [f'Cash: ${report.cash:,}', f'Deeds held: {report.owned_properties}', '']
+        self.gameplay_text.setPlainText('\n'.join(balances + [
+            f'Games played: {p.games_played}',
+            f'Games completed: {p.games_completed}',
+            f'Wins: {p.games_won}',
+            f'Bankruptcies: {p.bankruptcies}',
+            '',
             f'Dice rolls: {p.dice_rolls}',
             f'Doubles rolled: {p.doubles_rolled}',
             f'Total spaces moved: {p.total_spaces_moved}',
@@ -268,8 +363,3 @@ class PlayerAccountDialog(QDialog):
             if not values:
                 finance.append('  No transactions yet')
         self.finance_text.setPlainText('\n'.join(finance))
-        account = PlayerAccount(self.player)
-        self.pin_status.setText(
-            'PIN locked' if account.is_locked else 'No PIN set'
-        )
-        self._populate_properties()
