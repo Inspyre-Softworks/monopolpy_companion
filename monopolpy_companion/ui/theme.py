@@ -94,6 +94,11 @@ def stylesheet(dark: bool = True) -> str:
         color: {t['red']};
         letter-spacing: 1px;
     }}
+    QLabel#turnTitle {{
+        color: {t['text']};
+        font-size: 30px;
+        font-weight: 750;
+    }}
     QLabel#subTitle, QLabel#meta, QLabel#deedHint {{
         color: {t['subtle']};
         background: transparent;
@@ -172,6 +177,14 @@ def stylesheet(dark: bool = True) -> str:
     QPushButton:hover {{
         background-color: {t['highlight']};
         border-color: {t['green']};
+    }}
+    QPushButton#turnPrimaryAction {{
+        background-color: {t['green']};
+        border-color: {t['green']};
+        color: {t['app'] if dark else t['surface']};
+    }}
+    QPushButton#turnPrimaryAction:hover {{
+        border-color: {t['text']};
     }}
     QPushButton#primaryAction {{
         background: {t['red']};
@@ -257,6 +270,11 @@ def stylesheet(dark: bool = True) -> str:
         border: 1px solid {t['line']};
         border-radius: 10px;
         padding: 8px;
+    }}
+    QTabWidget#dashboardTabs::pane {{
+        background: transparent;
+        border: none;
+        padding: 0;
     }}
     QTabBar::tab {{
         background: {t['surface_alt']};

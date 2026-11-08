@@ -19,9 +19,9 @@ def run(enabled_plugins: list[str] | None = None) -> int:
     owns_app = application is None
     if application is None:
         application = QApplication(sys.argv)
-    load_user_font()
+    font_family = load_user_font()
     application.setStyle('Fusion')
-    application.setFont(body_font(10))
+    application.setFont(body_font(10, family=font_family))
     application.setApplicationName('MonopolPy Companion')
     application.setWindowIcon(make_app_icon())
     application.setOrganizationName('Inspyre Softworks')

@@ -91,6 +91,7 @@ class QtGuiTests(unittest.TestCase):
 
     def test_landing_purchase_updates_wallet_deed_ledger_and_save(self):
         session = self.controller.new_session('Buy a deed', ['Avery', 'Blake'])
+        self.window.dashboard_widget.setCurrentWidget(self.window.players_view)
         self.window.die_one.setValue(1)
         self.window.die_two.setValue(2)
         with patch(
@@ -110,6 +111,25 @@ class QtGuiTests(unittest.TestCase):
         self.assertEqual(self.window.ledger_table.item(0, 1).text(), 'Purchase')
         saved = self.controller.repository.load(session.save_path)
         self.assertEqual(saved.property_states[3].owner_id, session.players[0].player_id)
+
+    def test_turn_view_buys_landing_inline_and_updates_balance(self):
+        session = self.controller.new_session('Game night', ['Avery', 'Blake'])
+        tabs = self.window.dashboard_widget
+        self.assertEqual([tabs.tabText(i) for i in range(tabs.count())],
+                         ['This Turn', 'Board', 'Players', 'Ledger'])
+        self.assertEqual(tabs.currentWidget(), self.window.turn_view)
+        self.assertEqual(self.window.windowTitle(), session.name)
+        self.window.die_one.setValue(1)
+        self.window.die_two.setValue(2)
+        with patch('monopolpy_companion.ui.main_window.QMessageBox.question') as prompt:
+            self.window._move_by_dice()
+            prompt.assert_not_called()
+        self.assertEqual(self.window.turn_property.text(), 'Baltic Avenue')
+        self.assertTrue(self.window.quick_buttons['next'].isHidden())
+        self.window.quick_buttons['buy'].click()
+        self.assertEqual(session.owner_for(3).player_id, session.players[0].player_id)
+        self.assertIn('$1,440', self.window.turn_balances.text())
+        self.assertFalse(self.window.quick_buttons['next'].isHidden())
 
     def test_board_purchase_button_shows_confirmation_without_movement(self):
         session = self.controller.new_session('Direct buy', ['Avery', 'Blake'])
@@ -250,7 +270,7 @@ class QtGuiTests(unittest.TestCase):
         self.window.next_action.trigger()
         self.assertEqual(session.current_player.player_id, incoming.player_id)
         self.assertEqual(self.window.player_picker.currentData(), incoming.player_id)
-        self.assertIn('Turn: Casey', self.window.subtitle.text())
+        self.assertEqual(self.window.turn_title.text(), 'Casey’s turn')
         with patch.object(self.controller.engine, 'simulate_dice', return_value=(1, 2)) as roll:
             with patch('monopolpy_companion.ui.main_window.QInputDialog.getText') as password:
                 self.window._roll_and_move()

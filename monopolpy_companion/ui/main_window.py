@@ -14,7 +14,8 @@ from PySide6.QtGui import QAction, QColor, QBrush, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QFileDialog, QGridLayout, QLineEdit,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
-    QSpinBox, QSplitter, QTableWidgetItem, QToolBar, QVBoxLayout, QWidget, QTabWidget, QHeaderView, QScrollArea, QLayout,
+    QHeaderView, QLayout, QMenu, QScrollArea, QSpinBox, QTabWidget,
+    QTableWidgetItem, QToolBar, QToolButton, QVBoxLayout, QWidget,
 )
 
 from monopolpy_companion.controller import SessionController, SessionSaveError
@@ -32,7 +33,6 @@ from .widgets import TitleBar
 from .account_dialog import PlayerAccountDialog
 from .branding import BOARD_GROUP_COLORS, make_app_icon
 from .theme import stylesheet
-from .fonts import display_font
 from .widgets import HelpButton, PanelCard, PropertyDetailCard, ReadOnlyTable
 
 
@@ -88,6 +88,9 @@ class MainWindow(QMainWindow):
     def _on_game_event(self, event):
         self.refresh(follow_turn=event.name in {'turn_advanced', 'session_changed'})
         if event.name == 'session_changed':
+            self.dashboard_widget.setCurrentWidget(self.turn_view)
+            self.activity_label.hide()
+            self.statusBar().clearMessage()
             self.salary_timer.stop()
             self.salary_notice.hide()
         elif event.name == 'bankruptcy_declared':
@@ -119,7 +122,7 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         """Build a contemporary, card-based electronic banker dashboard."""
-        self.setWindowTitle('MonopolPy Companion — Game Dashboard')
+        self.setWindowTitle('MonopolPy Companion')
         self.setWindowIcon(make_app_icon())
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.setMenuWidget(TitleBar(self))
@@ -135,44 +138,50 @@ class MainWindow(QMainWindow):
         self.addToolBar(self._plugin_toolbar)
         self._plugin_toolbar.hide()
 
-        self.new_action = self._toolbar_action(
-            toolbar, 'New game', 'Create a new session with two or more players',
-            self._new_game,
-        )
-        self.open_action = self._toolbar_action(
-            toolbar, 'Open', 'Resume an existing saved game', self._open_game
-        )
+        game_menu = QMenu('Game', self)
+        game_button = QToolButton()
+        game_button.setText('Game')
+        game_button.setMenu(game_menu)
+        game_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        toolbar.addWidget(game_button)
         self.save_action = self._toolbar_action(
             toolbar, 'Save', 'Save player balances and game state', self._save
         )
-        self._toolbar_action(toolbar, 'Create Account', 'Register a local account', self._create_account)
-        self._toolbar_action(toolbar, 'Settings', 'Save desktop preferences', self._settings)
-        self.game_settings_action = self._toolbar_action(
-            toolbar, 'Game Settings', 'Set the active game GO salary', self._game_settings
+        self.new_action = self._toolbar_action(
+            game_menu, 'New game', 'Create a new session with two or more players',
+            self._new_game,
         )
-        self.mortgages_action = self._toolbar_action(toolbar, 'Mortgages', 'Select several properties and preview borrowing or repayment', lambda: self._open_mortgage_planner('mortgage'))
+        self.open_action = self._toolbar_action(
+            game_menu, 'Open', 'Resume an existing saved game', self._open_game
+        )
+        self._toolbar_action(game_menu, 'Create Account', 'Register a local account', self._create_account)
+        self._toolbar_action(game_menu, 'Settings', 'Save desktop preferences', self._settings)
+        self.game_settings_action = self._toolbar_action(
+            game_menu, 'Game Settings', 'Set the active game GO salary', self._game_settings
+        )
+        self.mortgages_action = self._toolbar_action(game_menu, 'Mortgages', 'Select several properties and preview borrowing or repayment', lambda: self._open_mortgage_planner('mortgage'))
         self.dev_action = self._toolbar_action(
-            toolbar, 'Marauder’s Map', 'Open unlocked game grants', self._open_dev_tools
+            game_menu, 'Marauder’s Map', 'Open unlocked game grants', self._open_dev_tools
         )
         self.dev_action.setVisible(False)
         self.dev_shortcut = QShortcut(QKeySequence('Ctrl+Shift+M'), self)
         self.dev_shortcut.activated.connect(self._open_dev_tools)
-        self.trade_action = self._toolbar_action(toolbar, 'Trade', 'Exchange cash and assets between players', self._trade)
-        toolbar.addSeparator()
+        self.trade_action = self._toolbar_action(game_menu, 'Trade', 'Exchange cash and assets between players', self._trade)
+        game_menu.addSeparator()
         self.next_action = self._toolbar_action(
-            toolbar, 'Next turn', 'Advance to the next nonbankrupt player',
+            game_menu, 'Next turn', 'Advance to the next nonbankrupt player',
             lambda: self._perform('advance_turn'),
         )
-        toolbar.addSeparator()
+        game_menu.addSeparator()
         self.landing_action = self._toolbar_action(
-            toolbar, 'Landing alerts', 'Show purchase and rent decisions after movement',
+            game_menu, 'Landing alerts', 'Show purchase and rent decisions after movement',
             self._toggle_landing_prompts,
         )
         self.landing_action.setCheckable(True)
         self.landing_action.setChecked(True)
-        toolbar.addSeparator()
+        game_menu.addSeparator()
         self.theme_action = self._toolbar_action(
-            toolbar, 'Light theme', 'Switch between light and dark palettes',
+            game_menu, 'Light theme', 'Switch between light and dark palettes',
             self._toggle_theme,
         )
 
@@ -182,40 +191,6 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(central)
         root.setContentsMargins(24, 21, 24, 20)
         root.setSpacing(16)
-
-        hero = QFrame()
-        hero.setObjectName('hero')
-        hero_layout = QHBoxLayout(hero)
-        hero_layout.setContentsMargins(24, 18, 24, 18)
-        hero_layout.setSpacing(16)
-        headline = QVBoxLayout()
-        headline.setSpacing(4)
-        eyebrow = QLabel('THE ELECTRONIC BANKER  /  GAME NIGHT')
-        eyebrow.setObjectName('eyebrow')
-        eyebrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        headline.addWidget(eyebrow)
-        title = QLabel('MONOPOLPY')
-        title.setObjectName('headerTitle')
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        headline.addWidget(title)
-        self.subtitle = QLabel('Start a session to keep every deed and dollar accounted for.')
-        self.subtitle.setObjectName('subTitle')
-        self.subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        headline.addWidget(self.subtitle)
-        hero_layout.addLayout(headline, stretch=1)
-        brand_mark = QLabel('BUY  •  BUILD  •  COLLECT')
-        brand_mark.setObjectName('meta')
-        brand_mark.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        # Balance the right-hand tagline so the heading is centered in the banner.
-        balance = QLabel(brand_mark.text())
-        balance.setObjectName('meta')
-        policy = balance.sizePolicy()
-        policy.setRetainSizeWhenHidden(True)
-        balance.setSizePolicy(policy)
-        balance.hide()
-        hero_layout.insertWidget(0, balance)
-        hero_layout.addWidget(brand_mark)
-        root.addWidget(hero)
 
         self.activity_label = QLabel('')
         self.activity_label.setObjectName('activityBanner')
@@ -246,7 +221,7 @@ class MainWindow(QMainWindow):
         welcome_layout = self.welcome_widget.layout_root
         welcome_layout.addStretch()
         welcome_message = QLabel('READY TO PASS GO?')
-        welcome_message.setFont(display_font(28))
+        welcome_message.setObjectName('headerTitle')
         welcome_message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         welcome_layout.addWidget(welcome_message)
         start_buttons = QHBoxLayout()
@@ -266,45 +241,71 @@ class MainWindow(QMainWindow):
         welcome_layout.addStretch()
         root.addWidget(self.welcome_widget, stretch=1)
 
-        root.addWidget(self._build_quick_actions())
+        turn = QWidget()
+        turn_layout = QVBoxLayout(turn)
+        turn_layout.setContentsMargins(0, 24, 0, 16)
+        turn_content = QWidget()
+        turn_content.setMaximumWidth(660)
+        content_layout = QVBoxLayout(turn_content)
+        content_layout.setContentsMargins(12, 0, 12, 0)
+        content_layout.setSpacing(12)
+        self.subtitle = QLabel()
+        self.subtitle.setObjectName('eyebrow')
+        content_layout.addWidget(self.subtitle)
+        self.turn_title = QLabel()
+        self.turn_title.setObjectName('turnTitle')
+        self.turn_title.setTextFormat(Qt.TextFormat.PlainText)
+        self.turn_title.setWordWrap(True)
+        content_layout.addWidget(self.turn_title)
+        content_layout.addWidget(self._build_quick_actions())
+        self.turn_balances = QLabel()
+        self.turn_balances.setObjectName('meta')
+        self.turn_balances.setTextFormat(Qt.TextFormat.PlainText)
+        self.turn_balances.setWordWrap(True)
+        content_layout.addWidget(self.turn_balances)
+        turn_row = QHBoxLayout()
+        turn_row.addStretch()
+        turn_row.addWidget(turn_content, stretch=8)
+        turn_row.addStretch()
+        turn_layout.addLayout(turn_row)
+        turn_layout.addStretch()
 
         self.property_trackers = PropertyTrackers()
         tracker_card = PanelCard('Property ownership',
             'Outline = not owned here. Filled = owned. X = mortgaged. Gold outline = complete set.')
         tracker_card.layout_root.addWidget(self.property_trackers)
-        controls = QTabWidget()
-        for panel, title in [(self._build_player_group(), 'Players & banker'),
-                             (self._build_board_group(), 'Board & properties')]:
-            panel.layout_root.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
-            scroller = QScrollArea()
-            scroller.setWidgetResizable(True)
-            scroller.setFrameShape(QFrame.Shape.NoFrame)
-            scroller.setWidget(panel)
-            controls.addTab(scroller, title)
-        main_pane = QSplitter(Qt.Orientation.Vertical)
-        main_pane.setChildrenCollapsible(False)
-        main_pane.addWidget(tracker_card)
-        main_pane.addWidget(controls)
-        main_pane.setStretchFactor(0, 2)
-        main_pane.setStretchFactor(1, 3)
-        main_pane.setSizes([380, 320])
+        board = QWidget()
+        board_layout = QVBoxLayout(board)
+        board_layout.setContentsMargins(0, 0, 0, 0)
+        board_layout.addWidget(tracker_card)
+        board_layout.addWidget(self._build_board_group())
 
-        dashboard = QSplitter(Qt.Orientation.Horizontal)
-        dashboard.setChildrenCollapsible(False)
-        dashboard.addWidget(main_pane)
-        dashboard.addWidget(self._build_ledger_group())
-        dashboard.setStretchFactor(0, 3)
-        dashboard.setStretchFactor(1, 1)
-        dashboard.setSizes([870, 420])
-        self.dashboard_widget = dashboard
+        self.dashboard_widget = QTabWidget()
+        self.dashboard_widget.setObjectName('dashboardTabs')
+        self.dashboard_widget.tabBar().setDrawBase(False)
+        self.turn_view = turn
+        self.players_view = self._scroll_view(self._build_player_group())
+        self.dashboard_widget.addTab(turn, 'This Turn')
+        self.dashboard_widget.addTab(self._scroll_view(board), 'Board')
+        self.dashboard_widget.addTab(self.players_view, 'Players')
+        self.dashboard_widget.addTab(self._build_ledger_group(), 'Ledger')
         root.addWidget(self.dashboard_widget, stretch=1)
 
         self.statusBar().showMessage(
             'Create a new game or open a save to start managing the board.'
         )
 
+    @staticmethod
+    def _scroll_view(panel: QWidget) -> QScrollArea:
+        panel.layout().setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        scroller = QScrollArea()
+        scroller.setWidgetResizable(True)
+        scroller.setFrameShape(QFrame.Shape.NoFrame)
+        scroller.setWidget(panel)
+        return scroller
+
     def _toolbar_action(
-        self, toolbar: QToolBar, name: str, help_text: str, callback
+        self, toolbar: QToolBar | QMenu, name: str, help_text: str, callback
     ) -> QAction:
         """Create one textual, described toolbar action."""
         action = QAction(name, self)
@@ -326,15 +327,24 @@ class MainWindow(QMainWindow):
         return button
 
     def _build_quick_actions(self) -> PanelCard:
-        self.quick_actions = PanelCard('Quick Actions')
+        self.quick_actions = QFrame()
+        self.quick_actions.setObjectName('surface')
+        layout = QVBoxLayout(self.quick_actions)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+        self.turn_property = QLabel()
+        self.turn_property.setObjectName('deedTitle')
+        self.turn_property.setWordWrap(True)
+        layout.addWidget(self.turn_property)
         self.quick_status = QLabel()
+        self.quick_status.setTextFormat(Qt.TextFormat.PlainText)
         self.quick_status.setWordWrap(True)
-        self.quick_actions.layout_root.addWidget(self.quick_status)
+        layout.addWidget(self.quick_status)
         row = QHBoxLayout()
         self.quick_buttons = {}
         actions = (
-            ('roll', 'Roll dice', lambda: self._quick_for_current(self._roll_dice)),
             ('roll_move', 'Roll + move', lambda: self._quick_for_current(self._roll_and_move)),
+            ('roll', 'Roll dice', lambda: self._quick_for_current(self._roll_dice)),
             ('move', 'Move using roll', lambda: self._quick_for_current(self._move_by_dice)),
             ('pay', 'Pay amount owed', lambda: self._quick_for_current(self._pay_outstanding)),
             ('buy', 'Buy property', self._buy_landing),
@@ -345,7 +355,8 @@ class MainWindow(QMainWindow):
             ('bail', 'Pay $50 bail', lambda: self._quick_for_current(self._jail_bail)),
             ('jail_card', 'Use jail release card', lambda: self._quick_for_current(self._release_from_jail)),
             ('mortgage', 'Mortgages', lambda: self._quick_for_current(lambda: self._open_mortgage_planner('mortgage'))),
-            ('trade', 'Trade', lambda: self._quick_for_current(self._trade)),
+            ('manual', 'Enter dice', lambda: self._quick_for_current(
+                lambda: self.dashboard_widget.setCurrentWidget(self.players_view))),
             ('bankruptcy', 'Declare bankruptcy', self._declare_bankruptcy),
             ('next', 'Next turn', lambda: self._perform('advance_turn')),
         )
@@ -355,7 +366,7 @@ class MainWindow(QMainWindow):
             self.quick_buttons[key] = button
             row.addWidget(button)
         row.addStretch()
-        self.quick_actions.layout_root.addLayout(row)
+        layout.addLayout(row)
         return self.quick_actions
 
     def _quick_for_current(self, callback):
@@ -372,6 +383,8 @@ class MainWindow(QMainWindow):
             return
         engine = self.controller.engine
         visible = {}
+        primary = None
+        property_name = ''
         status = player.name
         auction = session.auction
         if session.winner_id is not None:
@@ -383,11 +396,12 @@ class MainWindow(QMainWindow):
             high_bid = f"{leader} leads at ${auction['bid']:,}." if leader else 'No bids yet.'
             status = f'Auction for {space.name}. {high_bid} {bidder.name} to bid or pass.'
             visible = {'bid': bidder.cash > auction['bid'], 'pass': True}
+            property_name = space.name
+            primary = 'bid' if visible['bid'] else 'pass'
         else:
             player_id = player.player_id
             debts = engine.outstanding_payments(player_id)
             offer = session.purchase_offer
-            visible = {'trade': True}
             if debts:
                 debt = debts[0]
                 space = session.board[debt['space_index']]
@@ -395,38 +409,53 @@ class MainWindow(QMainWindow):
                 status += f" owes {debt['kind']} on {space.name} ({amount})."
                 self.quick_buttons['pay'].setText(f"Pay {debt['kind']} ({amount})")
                 visible.update(pay=True, mortgage=True)
+                primary = 'pay'
                 if debt['amount'] is None or debt['amount'] > player.cash:
                     visible['bankruptcy'] = True
             elif offer is not None:
                 space = session.board[offer]
-                status += f' can buy {space.name} for ${space.price:,} or start an auction.'
+                property_name = space.name
+                status = f'Landed on an unowned property. Buy it for ${space.price:,}, or start an auction.'
                 self.quick_buttons['buy'].setText(f'Buy for ${space.price:,}')
                 visible.update(buy=player.cash >= space.price, auction=True)
+                primary = 'buy' if visible['buy'] else 'auction'
             elif player.in_jail and not session.turn_ended:
                 status += ' is in Jail.'
                 visible.update(jail_roll=engine.can_roll_for_doubles(player_id), bail=player.cash >= 50,
                                jail_card=player.get_out_of_jail_cards > 0 and player.jail_turns < 3
                                and not any(session.dice_rolls[index].get('source') == 'jail'
                                            for index in session.turn_roll_indices))
+                primary = next((key for key in ('jail_roll', 'bail', 'jail_card')
+                                if visible[key]), None)
                 if player.cash < 50:
                     visible['mortgage'] = True
                     if player.jail_turns >= 3:
                         visible['bankruptcy'] = True
             elif engine.can_roll(player_id):
                 status += ' can roll the dice.'
-                visible.update(roll=True, roll_move=True)
+                visible.update(roll=True, roll_move=True, manual=True)
+                primary = 'roll_move'
             elif engine.can_move_by_dice(player_id):
                 roll = session.dice_rolls[session.turn_roll_indices[-1]]
                 status += f" rolled {roll['die_one']} + {roll['die_two']}. Move using that roll."
                 visible['move'] = True
+                primary = 'move'
             elif engine.can_advance_turn():
                 status += ' can end the turn.'
-            if engine.can_advance_turn():
+            if offer is None and engine.can_advance_turn():
                 visible['next'] = True
+                primary = primary or 'next'
+        self.turn_property.setText(property_name)
+        self.turn_property.setVisible(bool(property_name))
         self.quick_status.setText(status)
         for key, button in self.quick_buttons.items():
             button.setVisible(key in visible)
             button.setEnabled(visible.get(key, False))
+            name = 'turnPrimaryAction' if key == primary else ''
+            if button.objectName() != name:
+                button.setObjectName(name)
+                button.style().unpolish(button)
+                button.style().polish(button)
 
     def _declare_bankruptcy(self):
         session = self.controller.session
@@ -690,7 +719,7 @@ class MainWindow(QMainWindow):
         self.die_one.setEnabled(has_game)
         self.die_two.setEnabled(has_game)
         if session is None:
-            self.subtitle.setText('No active game — create or load a saved session.')
+            self.setWindowTitle('MonopolPy Companion')
             self.player_picker.clear()
             self.player_table.setRowCount(0)
             self.board_table.setRowCount(0)
@@ -723,11 +752,15 @@ class MainWindow(QMainWindow):
         self._update_player_focus()
 
         current = session.current_player
-        turn_label = current.name if current is not None else 'None'
-        self.subtitle.setText(
-            f'{session.name}  •  Turn: {turn_label}  •  '
-            f'{len(session.players)} players  •  Autosave enabled'
+        turn_number = sum(session.turn_counts.values())
+        self.subtitle.setText(f'TURN {turn_number}' if current else 'GAME OVER')
+        self.turn_title.setText(
+            f'{session.get_player(session.winner_id).name} wins!' if session.winner_id
+            else f'{current.name}’s turn' if current else 'Game over'
         )
+        self.turn_balances.setText('   •   '.join(
+            f'{player.name}  ${player.cash:,}' for player in session.players if not player.bankrupt
+        ))
 
         self.player_table.setRowCount(len(session.players))
         board = session.board
@@ -815,7 +848,7 @@ class MainWindow(QMainWindow):
         self.ledger_table.resizeRowsToContents()
         for table in (self.player_table, self.board_table):
             table.resizeColumnsToContents()
-        self.setWindowTitle(f'{session.name} — MonopolPy Companion')
+        self.setWindowTitle(session.name)
 
     def _update_player_focus(self, _index: int = -1) -> None:
         """Update the visible wallet summary whenever the active player changes."""
@@ -1158,6 +1191,8 @@ class MainWindow(QMainWindow):
         if item is not None:
             self.board_table.scrollToItem(item)
         self.statusBar().showMessage(f'Landed on {space.name}', 9000)
+        if self.dashboard_widget.currentWidget() is self.turn_view:
+            return  # This Turn already presents purchase and payment actions inline.
         if not self.controller.session.show_landing_prompts or not space.ownable:
             return
         owner = self.controller.session.owner_for(space.index)

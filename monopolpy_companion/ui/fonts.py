@@ -15,10 +15,10 @@ from monopolpy_companion.lib.common.paths import APP_DATA_DIR
 
 _DISPLAY_FAMILIES = (
     'Kabel LT Std', 'Kabel LTStd', 'ITC Kabel', 'Kabel Heavy', 'Kabel',
-    'Monopoly', 'League Spartan', 'Century Gothic', 'Avenir Next',
+    'Monopoly Sans', 'Monopoly', 'League Spartan', 'Century Gothic', 'Avenir Next',
     'Montserrat', 'Arial Black', 'Segoe UI',
 )
-_BODY_FAMILIES = ('Segoe UI Variable', 'Segoe UI', 'Inter', 'Arial')
+_BODY_FAMILIES = ('Monopoly Sans', 'Monopoly', 'Segoe UI Variable', 'Segoe UI', 'Inter', 'Arial')
 
 
 def _available_family(candidates: tuple[str, ...]) -> str:
@@ -46,9 +46,9 @@ def display_font(point_size: int = 24) -> QFont:
     return font
 
 
-def body_font(point_size: int = 10) -> QFont:
-    """Return a modern and readable system UI typeface."""
-    font = QFont(_available_family(_BODY_FAMILIES), point_size)
+def body_font(point_size: int = 10, *, family: str | None = None) -> QFont:
+    """Return the requested body font or the first available default."""
+    font = QFont(family or _available_family(_BODY_FAMILIES), point_size)
     font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
     return font
 
@@ -72,15 +72,18 @@ def title_family() -> str:
     return display_family()
 
 
-def load_user_font() -> bool:
+def load_user_font() -> str | None:
     """Register an optional font file owned and licensed by the user.
 
     The MONOPOLPY_FONT_FILE environment variable can point to an installed
     or otherwise legitimately licensed TTF/OTF font.
 
     Returns:
-        True when Qt successfully registered the given font file.
+        The registered family name, or None if the file could not be loaded.
     """
     source = os.environ.get('MONOPOLPY_FONT_FILE', '').strip()
-    return bool(source and Path(source).is_file()
-                and QFontDatabase.addApplicationFont(source) >= 0)
+    if not source or not Path(source).is_file():
+        return None
+    font_id = QFontDatabase.addApplicationFont(source)
+    families = QFontDatabase.applicationFontFamilies(font_id) if font_id >= 0 else []
+    return families[0] if families else None

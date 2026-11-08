@@ -7,6 +7,12 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Center the game name in the window caption and give the desktop dashboard a focused turn view with separate Board, Players, and Ledger tabs.
+
+### Changed
+- Use an installed Monopoly font or a local font selected with `MONOPOLPY_FONT_FILE` for regular desktop GUI text.
+
 ### Fixed
 - Show the Marauder’s Map toolbar button at startup when developer mode is enabled in the profile.
 

@@ -11,7 +11,7 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QAbstractItemView, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QVBoxLayout, QWidget,
+    QSizePolicy, QTableWidget, QVBoxLayout, QWidget,
 )
 
 from .fonts import display_font
@@ -219,7 +219,17 @@ class TitleBar(QFrame):
         window.statusBar().addPermanentWidget(self.resize_grip)
         self.setObjectName('hero')
         layout = QHBoxLayout(self)
+        controls = QWidget()
+        control_layout = QHBoxLayout(controls)
+        control_layout.setContentsMargins(0, 0, 0, 0)
+        icon = QLabel()
+        icon.setPixmap(window.windowIcon().pixmap(20, 20))
+        icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(icon)
         label = QLabel(window.windowTitle())
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         window.windowTitleChanged.connect(label.setText)
         label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(label, stretch=1)
@@ -231,7 +241,9 @@ class TitleBar(QFrame):
             button.setToolTip(tip)
             button.setFixedWidth(46)
             button.clicked.connect(handler)
-            layout.addWidget(button)
+            control_layout.addWidget(button)
+        icon.setFixedWidth(controls.sizeHint().width())
+        layout.addWidget(controls)
 
     def _maximize(self):
         if self.window.isMaximized():
