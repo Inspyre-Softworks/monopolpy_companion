@@ -1,0 +1,15 @@
+site_name: MonopolPy Companion
+repo_url: https://github.com/Inspyre-Softworks/monopolpy_companion
+edit_uri: edit/master/docs/
+
+nav:
+  - Home: index.md
+  - Desktop guide:
+      - Dashboard: GUI.md
+      - Player accounts and reports: ACCOUNTS_AND_STATISTICS.md
+      - Marauder’s Map: MARAUDERS_MAP.md
+  - Developer guide:
+      - Library API: LIBRARY_API.md
+      - Architecture: LIBRARY_ARCHITECTURE.md
+      - Plugins: PLUGINS.md
+  - Roadmap: PLAYABLE_COMPANION_ROADMAP.md

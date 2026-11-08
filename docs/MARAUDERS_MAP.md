@@ -74,7 +74,7 @@ or remove `mm.lock` manually to restore the default locked state.
 
 ## Dialogs, fonts, and resources
 
-The private builders in [map_unlock.py](../monopolpy_companion/ui/map_unlock.py)
+The private builders in [map_unlock.py](https://github.com/Inspyre-Softworks/monopolpy_companion/blob/master/monopolpy_companion/ui/map_unlock.py)
 create custom Qt dialogs with a framed parchment panel and standard widgets.
 The introduction and phrase entry are separate modal steps. The phrase dialog
 uses a labeled and accessible `QLineEdit` with normal echo, initial focus,
@@ -83,15 +83,15 @@ and Qt's logical-pixel geometry support DPI scaling. When changing the visuals,
 keep the focus indicator, text contrast, keyboard actions, and wrapping intact.
 
 Both Map fonts are bundled under
-[ui/resources](../monopolpy_companion/ui/resources). The loader reads the bytes
+[ui/resources](https://github.com/Inspyre-Softworks/monopolpy_companion/tree/master/monopolpy_companion/ui/resources). The loader reads the bytes
 with `importlib.resources.files('monopolpy_companion.ui')`, registers them with
 `QFontDatabase.addApplicationFontFromData()`, and caches the reported family
 for the process. It checks that Qt actually registered the expected family.
 
 | Font | Use | Source and license |
 | --- | --- | --- |
-| Caveat | Parchment inscription and typed phrase | [Caveat project](https://github.com/googlefonts/caveat), Copyright 2014 The Caveat Project Authors. [SIL OFL 1.1 notice](../monopolpy_companion/ui/resources/Caveat-OFL.txt). |
-| Source Sans 3 | Narrative prose, instructions, and buttons | [Adobe Source Sans](https://github.com/adobe-fonts/source-sans), Copyright 2010–2020 Adobe, reserved font name Source. [SIL OFL 1.1 notice](../monopolpy_companion/ui/resources/SourceSans3-OFL.txt). |
+| Caveat | Parchment inscription and typed phrase | [Caveat project](https://github.com/googlefonts/caveat), Copyright 2014 The Caveat Project Authors. [SIL OFL 1.1 notice](https://github.com/Inspyre-Softworks/monopolpy_companion/blob/master/monopolpy_companion/ui/resources/Caveat-OFL.txt). |
+| Source Sans 3 | Narrative prose, instructions, and buttons | [Adobe Source Sans](https://github.com/adobe-fonts/source-sans), Copyright 2010–2020 Adobe, reserved font name Source. [SIL OFL 1.1 notice](https://github.com/Inspyre-Softworks/monopolpy_companion/blob/master/monopolpy_companion/ui/resources/SourceSans3-OFL.txt). |
 
 The font files come from the [Caveat](https://github.com/google/fonts/tree/main/ofl/caveat)
 and [Source Sans 3](https://github.com/google/fonts/tree/main/ofl/sourcesans3)
@@ -153,13 +153,13 @@ for example:
 poetry run python -m unittest discover -s tests -p test_map_unlock.py -v
 ```
 
-- [Controller tests](../tests/test_session_controller.py) use temporary
+- [Controller tests](https://github.com/Inspyre-Softworks/monopolpy_companion/blob/master/tests/test_session_controller.py) use temporary
   profile files and fresh controllers to check startup restore, relocking,
   invalid bytes, trailing content, and a failed atomic replacement.
-- [Dashboard tests](../tests/test_qt_gui.py) check the shortcut binding and
+- [Dashboard tests](https://github.com/Inspyre-Softworks/monopolpy_companion/blob/master/tests/test_qt_gui.py) check the shortcut binding and
   handler, toolbar visibility, grants, and the toolbar path that skips the
   phrase prompt after restoration.
-- [Dialog tests](../tests/test_map_unlock.py) check the actual bytes passed
+- [Dialog tests](https://github.com/Inspyre-Softworks/monopolpy_companion/blob/master/tests/test_map_unlock.py) check the actual bytes passed
   to Qt, the fonts resolved by Qt's renderer, Continue, Enter, visible
   typing, and the logged fallback for missing and corrupt resources.
 
