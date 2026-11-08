@@ -88,7 +88,7 @@ class SessionControllerTests(unittest.TestCase):
         before = session.to_dict()
         with patch.object(self.repository, 'save', side_effect=OSError('Disk full')):
             with self.assertRaises(OSError):
-                self.controller.set_go_salary(500, double_on_go=False)
+                self.controller.set_go_salary(500, double_on_go=False, require_landing_to_buy=True)
         self.assertEqual(session.to_dict(), before)
 
     def test_creates_autosaves_and_reopens_session(self):

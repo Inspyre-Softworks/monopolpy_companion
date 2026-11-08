@@ -9,10 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QSettings, QTimer
-from PySide6.QtGui import QAction, QColor, QBrush, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, QSettings, QSize, QTimer
+from PySide6.QtGui import QAction, QColor, QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDialog, QFileDialog, QGridLayout, QLineEdit,
+    QApplication, QBoxLayout, QButtonGroup, QComboBox, QDialog, QFileDialog, QGridLayout, QLineEdit,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
     QHeaderView, QLayout, QMenu, QScrollArea, QSpinBox, QTabWidget,
     QTableWidgetItem, QToolBar, QToolButton, QVBoxLayout, QWidget,
@@ -36,6 +36,12 @@ from .theme import stylesheet
 from .widgets import HelpButton, PanelCard, PropertyDetailCard, ReadOnlyTable
 
 
+def _board_color_swatch(color: str) -> QIcon:
+    pixmap = QPixmap(10, 10)
+    pixmap.fill(QColor(color))
+    return QIcon(pixmap)
+
+
 class MainWindow(QMainWindow):
     """Main game dashboard with distinct player, board and ledger views.
 
@@ -55,6 +61,9 @@ class MainWindow(QMainWindow):
         self._dark_theme = self.settings.value('dark', True, type=bool)
         self._action_buttons: list[HelpButton] = []
         self._focused_property_index: int | None = None
+        self._board_swatches = {
+            group: _board_color_swatch(color) for group, color in BOARD_GROUP_COLORS.items()
+        }
         self._build_ui()
         self._apply_preferences()
         self.controller.subscribe(self._on_game_event)
@@ -84,6 +93,18 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
         if event.isAccepted() and self._plugins is not None:
             self._plugins.close()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._layout_board_workspace()
+
+    def _layout_board_workspace(self):
+        stacked = self.width() < 1550
+        self._board_workspace.setDirection(
+            QBoxLayout.Direction.BottomToTop if stacked else QBoxLayout.Direction.LeftToRight
+        )
+        self._board_workspace.setStretch(1, 0 if stacked else 2)
+        self.board_table.setMaximumWidth(1200 if stacked else 880)
 
     def _on_game_event(self, event):
         self.refresh(follow_turn=event.name in {'turn_advanced', 'session_changed'})
@@ -302,18 +323,22 @@ class MainWindow(QMainWindow):
         board = QWidget()
         board_layout = QVBoxLayout(board)
         board_layout.setContentsMargins(0, 0, 0, 0)
-        board_layout.addWidget(tracker_card)
-        board_layout.addWidget(self._build_board_group())
+        board_layout.addWidget(self._build_board_group(tracker_card), stretch=1)
 
         self.dashboard_widget = QTabWidget()
         self.dashboard_widget.setObjectName('dashboardTabs')
         self.dashboard_widget.tabBar().setDrawBase(False)
         self.turn_view = turn
         self.players_view = self._scroll_view(self._build_player_group())
+        self.player_picker.currentIndexChanged.connect(self._update_property_card)
         self.dashboard_widget.addTab(turn, 'This Turn')
-        self.dashboard_widget.addTab(self._scroll_view(board), 'Board')
+        board_view = self._scroll_view(board)
+        self.dashboard_widget.addTab(board_view, 'Board')
         self.dashboard_widget.addTab(self.players_view, 'Players')
         self.dashboard_widget.addTab(self._build_ledger_group(), 'Ledger')
+        self.dashboard_widget.currentChanged.connect(
+            lambda _: hero.setVisible(self.dashboard_widget.currentWidget() is not board_view)
+        )
         root.addWidget(self.dashboard_widget, stretch=1)
 
         self.statusBar().showMessage(
@@ -442,7 +467,8 @@ class MainWindow(QMainWindow):
                 property_name = space.name
                 status = f'Landed on an unowned property. Buy it for ${space.price:,}, or start an auction.'
                 self.quick_buttons['buy'].setText(f'Buy for ${space.price:,}')
-                visible.update(buy=player.cash >= space.price, auction=True)
+                on_space = not session.rules.require_landing_to_buy or player.position == offer
+                visible.update(buy=on_space and player.cash >= space.price, auction=True)
                 primary = 'buy' if visible['buy'] else 'auction'
             elif player.in_jail and not session.turn_ended:
                 status += ' is in Jail.'
@@ -638,22 +664,60 @@ class MainWindow(QMainWindow):
         layout.addLayout(buttons)
         return group
 
-    def _build_board_group(self) -> PanelCard:
+    def _build_board_group(self, tracker_card: PanelCard) -> PanelCard:
         """Build a selectable board list with property actions."""
-        group = PanelCard('Board & properties', 'Ownership, purchase price and current rent at a glance.')
-        layout = group.layout_root
+        group = PanelCard('Board & properties')
+        workspace = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self._board_workspace = workspace
+        workspace.setSpacing(18)
+        group.layout_root.addLayout(workspace, stretch=1)
+        side = QWidget()
+        side_layout = QVBoxLayout(side)
+        side_layout.setContentsMargins(0, 0, 0, 0)
+        side_layout.setSpacing(12)
+        side_top = QHBoxLayout()
+        side_layout.addLayout(side_top)
+        filters = QVBoxLayout()
+        filters.addWidget(QLabel('Ownership filter'))
+        self.board_filters = QButtonGroup(self)
+        for index, label in enumerate(('Show all', 'Show owned', 'Show unowned', 'Show owned by others')):
+            button = HelpButton(label, 'Ownership is relative to the player whose turn it is.')
+            button.setObjectName('boardFilter')
+            button.setCheckable(True)
+            self.board_filters.addButton(button, index)
+            filters.addWidget(button)
+        self.board_filters.button(0).setChecked(True)
+        self.board_filters.idClicked.connect(self._apply_board_filter)
+        filters.addStretch()
+        side_top.addLayout(filters)
+
+        detail = QFrame()
+        detail.setObjectName('boardDeedWell')
+        detail.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Sunken)
+        detail.setMaximumWidth(620)
+        detail_layout = QVBoxLayout(detail)
+        detail_layout.setContentsMargins(14, 14, 14, 14)
+        detail_layout.setSpacing(12)
         self.property_card = PropertyDetailCard()
-        layout.addWidget(self.property_card)
+        detail_layout.addWidget(self.property_card)
         self.board_table = ReadOnlyTable(
             ['#', 'Board space', 'Type', 'Owner', 'Development', 'Rent'],
             'All 40 Monopoly spaces; choose a row before purchasing or collecting rent.',
         )
+        self.board_table.setObjectName('boardTable')
+        self.board_table.setIconSize(QSize(10, 10))
         self.board_table.setMinimumHeight(250)
-        self.board_table.setColumnWidth(0, 42)
+        self.board_table.verticalHeader().setDefaultSectionSize(30)
+        header = self.board_table.horizontalHeader()
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        self.board_table.setColumnWidth(3, 110)
         self.board_table.itemSelectionChanged.connect(self._update_property_card)
-        layout.addWidget(self.board_table, stretch=1)
         buttons = QGridLayout()
-        self._button(
+        self.board_buy_button = self._button(
             'Buy property', 'Purchase the selected unowned deed for the active player.',
             lambda: self._board_action('purchase'), buttons, 0, 0,
         )
@@ -685,8 +749,46 @@ class MainWindow(QMainWindow):
             'Pay tax', 'Pay the printed tax on Income Tax or Luxury Tax.',
             lambda: self._board_action('pay_tax'), buttons, 3, 1,
         )
-        layout.addLayout(buttons)
+        for index in range(buttons.count()):
+            button = buttons.itemAt(index).widget()
+            button.setObjectName('boardAction')
+        buttons.setColumnStretch(0, 1)
+        buttons.setColumnStretch(1, 1)
+        detail_layout.addLayout(buttons)
+        side_top.addWidget(detail, stretch=1, alignment=Qt.AlignmentFlag.AlignTop)
+        side_layout.addWidget(tracker_card, stretch=1)
+        workspace.addWidget(self.board_table, stretch=3)
+        workspace.addWidget(side, stretch=2)
+        self._layout_board_workspace()
         return group
+
+    def _apply_board_filter(self, _index: int = -1) -> None:
+        session = self.controller.session
+        if session is None:
+            return
+        mode = self.board_filters.checkedId()
+        player = session.current_player
+        player_id = player.player_id if player else None
+        self.board_filters.button(1).setToolTip(
+            f'Show properties owned by {player.name}' if player else 'There is no active turn.'
+        )
+        table = self.board_table
+        for row, space in enumerate(session.board[:table.rowCount()]):
+            state = session.property_states.get(space.index)
+            owner_id = state.owner_id if state else None
+            matches = (
+                mode == 0
+                or space.ownable and (
+                    (mode == 1 and owner_id is not None and owner_id == player_id)
+                    or (mode == 2 and owner_id is None)
+                    or (mode == 3 and owner_id is not None and owner_id != player_id)
+                )
+            )
+            table.setRowHidden(row, not matches)
+        if table.currentRow() >= 0 and table.isRowHidden(table.currentRow()):
+            table.setCurrentCell(-1, -1)
+            table.clearSelection()
+            self._update_property_card()
 
     def _build_ledger_group(self) -> PanelCard:
         """Build the most recent transaction-history view."""
@@ -842,21 +944,14 @@ class MainWindow(QMainWindow):
                 strong = owner_cell.font()
                 strong.setBold(True)
                 owner_cell.setFont(strong)
-                owner_cell.setForeground(QBrush(QColor('#2aab7a' if not self._dark_theme else '#87e6ae')))
-            if space.color_group in BOARD_GROUP_COLORS:
-                shade = QColor(BOARD_GROUP_COLORS[space.color_group])
-                # Use a readable badge-like colored name cell, not a tinted
-                # entire row that obscures the selected/active highlight.
-                cell = self.board_table.item(row, 1)
-                cell.setBackground(QBrush(shade))
-                cell.setForeground(QBrush(
-                    QColor('#ffffff' if shade.lightness() < 155 else '#151c1a')
-                ))
+            if space.color_group in self._board_swatches:
+                self.board_table.item(row, 1).setIcon(self._board_swatches[space.color_group])
+        self._apply_board_filter()
         focus_row = (
             selected_row if 0 <= selected_row < len(board)
             else self._focused_property_index
         )
-        if focus_row is not None and 0 <= focus_row < len(board):
+        if focus_row is not None and 0 <= focus_row < len(board) and not self.board_table.isRowHidden(focus_row):
             self.board_table.setCurrentCell(focus_row, 0)
             self.board_table.selectRow(focus_row)
         self._update_property_card()
@@ -878,8 +973,7 @@ class MainWindow(QMainWindow):
                 record.description,
             ], self.ledger_table)
         self.ledger_table.resizeRowsToContents()
-        for table in (self.player_table, self.board_table):
-            table.resizeColumnsToContents()
+        self.player_table.resizeColumnsToContents()
         self.setWindowTitle(session.name)
 
     def _update_player_focus(self, _index: int = -1) -> None:
@@ -951,11 +1045,22 @@ class MainWindow(QMainWindow):
     def _update_property_card(self) -> None:
         """Render ownership and price from actual session state, not cached UI."""
         session = self.controller.session
+        index = self.board_table.currentRow()
+        selected = index >= 0 and not self.board_table.isRowHidden(index)
+        player_id = self.player_picker.currentData()
+        landing_required = session is not None and session.rules.require_landing_to_buy
+        on_space = selected and player_id is not None and session.get_player(player_id).position == index
+        self.board_buy_button.setEnabled(
+            session is not None and session.winner_id is None and (not landing_required or on_space)
+        )
+        self.board_buy_button.setToolTip(
+            'The buying player must be on the selected board space.' if landing_required and not on_space
+            else 'Purchase the selected unowned deed for the active player.'
+        )
         if session is None:
             self.property_card.clear()
             return
-        index = self.board_table.currentRow()
-        if not 0 <= index < len(session.board):
+        if not 0 <= index < len(session.board) or self.board_table.isRowHidden(index):
             self.property_card.clear()
             return
         space = session.board[index]
@@ -1115,7 +1220,7 @@ class MainWindow(QMainWindow):
     def _selected_board_index(self) -> int:
         """Get the active board row, rejecting absent selections."""
         row = self.board_table.currentRow()
-        if row < 0:
+        if row < 0 or self.board_table.isRowHidden(row):
             raise ValueError('Select a board space first.')
         return row
 
@@ -1136,7 +1241,26 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             self._show_error('Select player and space', exc)
             return
+        if action == 'liquidate_building_group' and not self._confirm_group_liquidation(player_id, space_index):
+            return
         self._perform(action, player_id, space_index)
+
+    def _confirm_group_liquidation(self, player_id: str, space_index: int) -> bool:
+        try:
+            proceeds = self.controller.engine.building_group_liquidation_quote(player_id, space_index)
+        except ValueError as exc:
+            self._show_error('Cannot liquidate group', exc)
+            return False
+        space = self.controller.session.board[space_index]
+        dialog = QMessageBox(QMessageBox.Icon.Question, 'Confirm group liquidation',
+                             f'Sell all buildings in the {space.color_group} group?\n\n'
+                             f'Expected cash return: ${proceeds:,}.',
+                             QMessageBox.StandardButton.Cancel, self)
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        confirm = dialog.addButton('Confirm', QMessageBox.ButtonRole.AcceptRole)
+        dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        dialog.exec()
+        return dialog.clickedButton() is confirm
 
     def _pay_outstanding(self):
         player_id = self._selected_player_id()

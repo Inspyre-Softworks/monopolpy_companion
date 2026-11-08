@@ -233,6 +233,24 @@ def stylesheet(dark: bool = True) -> str:
         background-color: {t['highlight']};
         color: {t['text']};
     }}
+    QTableWidget#boardTable QHeaderView::section {{
+        padding: 6px 9px;
+    }}
+    QPushButton#boardAction {{
+        padding: 8px 14px;
+        font-size: 14px;
+    }}
+    QFrame#boardDeedWell {{
+        background: {t['app']};
+        border: 1px solid {t['line']};
+        border-top-color: {t['app']};
+        border-left-color: {t['app']};
+        border-radius: 10px;
+    }}
+    QPushButton#boardFilter:checked {{
+        background-color: {t['highlight']};
+        border-color: {t['green']};
+    }}
     QHeaderView::section {{
         color: {t['subtle']};
         background-color: {t['surface_alt']};

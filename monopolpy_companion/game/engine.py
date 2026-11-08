@@ -1080,20 +1080,27 @@ class GameEngine:
                    space_index=space_index, level=level - 1)
         return state
 
-    def liquidate_building_group(self, player_id: str, space_index: int) -> int:
-        """Sell every building in a color group without requiring replacement houses."""
+    def _building_group_sales(self, player_id: str, space_index: int) -> list[tuple[PropertyState, int]]:
         space, _ = self._owned(player_id, space_index)
         group = self._color_group(space)
         if not all(item.owner_id == player_id and not item.mortgaged for item in group):
             raise ValueError('A complete unmortgaged color group is required')
         if not any(self._level(item) for item in group):
             raise ValueError('No buildings to sell')
+        return [(item, self._level(item) * (self._space(item.space_index).house_cost // 2))
+                for item in group]
+
+    def building_group_liquidation_quote(self, player_id: str, space_index: int) -> int:
+        """Return the cash proceeds of a full building group sale."""
+        return sum(amount for _, amount in self._building_group_sales(player_id, space_index))
+
+    def liquidate_building_group(self, player_id: str, space_index: int) -> int:
+        """Sell every building in a color group without requiring replacement houses."""
         proceeds = 0
-        for item in group:
-            deed = self._space(item.space_index)
-            amount = self._level(item) * (deed.house_cost // 2)
+        for item, amount in self._building_group_sales(player_id, space_index):
             if not amount:
                 continue
+            deed = self._space(item.space_index)
             item.houses = 0
             item.hotel = False
             self.transfer(amount, to_player_id=player_id,

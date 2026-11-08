@@ -136,6 +136,7 @@ class GameRules:
     three_doubles_to_jail: bool = True
     allow_rent_immunity: bool = False
     immunity_follows_deed: bool = False
+    require_landing_to_buy: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -145,6 +146,7 @@ class GameRules:
             "three_doubles_to_jail": self.three_doubles_to_jail,
             "allow_rent_immunity": self.allow_rent_immunity,
             "immunity_follows_deed": self.immunity_follows_deed,
+            "require_landing_to_buy": self.require_landing_to_buy,
             "free_parking_collects_fees": self.free_parking_collects_fees,
         }
 
@@ -306,6 +308,8 @@ class GameSession:
         space = board[space_index]
         if not space.ownable:
             raise ValueError(f"{space.name} is not ownable")
+        if self.rules.require_landing_to_buy and player.position != space_index:
+            raise ValueError(f"{player.name} must be on {space.name} to buy it")
         state = self.get_property_state(space_index)
         if state.owner_id is not None:
             raise ValueError(f"{space.name} is already owned")

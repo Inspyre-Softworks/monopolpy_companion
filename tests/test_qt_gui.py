@@ -94,6 +94,44 @@ class QtGuiTests(unittest.TestCase):
         self.assertEqual(self.window.board_table.item(1, 3).text(), 'Avery')
         self.assertEqual(self.window.ledger_table.item(0, 1).text(), 'Purchase')
 
+    def test_board_ownership_filters_keep_board_indices_and_follow_turn(self):
+        session = self.controller.new_session('Ownership filters', ['Avery', 'Blake'])
+        a, b = session.players
+        self.controller.perform('purchase', a.player_id, 1)
+        self.controller.perform('purchase', b.player_id, 3)
+        table = self.window.board_table
+        filters = self.window.board_filters
+
+        def visible(row):
+            return not table.isRowHidden(row)
+
+        table.setCurrentCell(3, 0)
+        filters.button(1).click()
+        self.assertTrue(visible(1))
+        self.assertFalse(visible(3))
+        self.assertFalse(visible(0))
+        with self.assertRaisesRegex(ValueError, 'Select a board space'):
+            self.window._selected_board_index()
+        self.window.player_picker.setCurrentIndex(1)
+        self.assertTrue(visible(1))
+        self.assertFalse(visible(3))
+        self.controller.perform('move_by_dice', a.player_id, 2, 3)
+        self.controller.perform('advance_turn')
+        self.assertTrue(visible(3))
+        self.assertFalse(visible(1))
+        table.setCurrentCell(3, 0)
+        self.assertEqual(self.window._selected_board_index(), 3)
+        filters.button(3).click()
+        self.assertTrue(visible(1))
+        self.assertFalse(visible(3))
+        filters.button(2).click()
+        self.assertTrue(visible(5))
+        self.assertFalse(visible(1))
+        self.controller.perform('purchase', b.player_id, 5)
+        self.assertFalse(visible(5))
+        filters.button(0).click()
+        self.assertTrue(all(visible(row) for row in range(40)))
+
     def test_landing_purchase_updates_wallet_deed_ledger_and_save(self):
         session = self.controller.new_session('Buy a deed', ['Avery', 'Blake'])
         self.window.dashboard_widget.setCurrentWidget(self.window.players_view)
@@ -144,6 +182,59 @@ class QtGuiTests(unittest.TestCase):
         self.assertEqual(session.players[0].cash, 1440)
         self.assertIn('Mediterranean Avenue', self.window.activity_label.text())
         self.assertIn('OWNED BY AVERY', self.window.property_card.owner.text())
+
+    def test_landing_purchase_rule_saves_and_blocks_off_space_buying(self):
+        from monopolpy_companion.ui.dialogs import GameSettingsDialog
+
+        session = self.controller.new_session('Landing rule', ['Avery', 'Blake'])
+        a, b = session.players
+        self.window.board_table.setCurrentCell(5, 0)
+        self.assertTrue(self.window.board_buy_button.isEnabled())
+        dialog = GameSettingsDialog(self.controller)
+        self.assertFalse(dialog.require_landing_to_buy.isChecked())
+        dialog.require_landing_to_buy.setChecked(True)
+        dialog._save()
+        self.assertFalse(self.window.board_buy_button.isEnabled())
+        self.assertTrue(self.controller.repository.load(session.save_path).rules.require_landing_to_buy)
+        before = session.to_dict()
+        with self.assertRaisesRegex(ValueError, 'must be on Reading Railroad'):
+            self.controller.perform('purchase', a.player_id, 5)
+        self.assertEqual(session.to_dict(), before)
+
+        self.controller.perform('move_by_dice', a.player_id, 2, 3)
+        self.assertTrue(self.window.board_buy_button.isEnabled())
+        self.window.player_picker.setCurrentIndex(1)
+        self.assertFalse(self.window.board_buy_button.isEnabled())
+        with self.assertRaisesRegex(ValueError, 'must be on Reading Railroad'):
+            self.controller.perform('purchase', b.player_id, 5)
+        self.window.quick_buttons['buy'].click()
+        self.assertEqual(session.owner_for(5).player_id, a.player_id)
+
+    def test_liquidation_confirms_quoted_proceeds_before_selling(self):
+        session = self.controller.new_session('Liquidation', ['Avery', 'Blake'])
+        player = session.players[0]
+        for index in (1, 3):
+            self.controller.perform('purchase', player.player_id, index)
+            session.get_property_state(index).hotel = True
+        cash = player.cash
+        self.window.board_table.setCurrentCell(1, 0)
+
+        def choose(dialog, label):
+            self.assertIn('Expected cash return: $250', dialog.text())
+            cancel = dialog.button(QMessageBox.StandardButton.Cancel)
+            self.assertEqual(dialog.defaultButton(), cancel)
+            button = cancel if label == 'Cancel' else next(
+                button for button in dialog.buttons() if button.text() == label
+            )
+            button.click()
+
+        for label in ('Cancel', 'Confirm'):
+            with patch.object(QMessageBox, 'exec', lambda dialog: choose(dialog, label)):
+                self.window._board_action('liquidate_building_group')
+            confirmed = label == 'Confirm'
+            self.assertEqual(player.cash, cash + (250 if confirmed else 0))
+            self.assertEqual(session.get_property_state(1).hotel, not confirmed)
+            self.assertEqual(session.get_property_state(3).hotel, not confirmed)
 
     def test_disabled_landing_alert_still_focuses_space_without_buying(self):
         session = self.controller.new_session('No alerts', ['Avery', 'Blake'])

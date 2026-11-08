@@ -222,8 +222,9 @@ class SessionController:
     def set_go_salary(self, amount: int, *, double_on_go: bool | None = None,
                       three_doubles_to_jail: bool | None = None,
                       allow_rent_immunity: bool | None = None,
-                      immunity_follows_deed: bool | None = None) -> None:
-        """Persist the active game's salary in whole dollars; zero disables it."""
+                      immunity_follows_deed: bool | None = None,
+                      require_landing_to_buy: bool | None = None) -> None:
+        """Persist the active game's salary and optional house rules."""
         if self.session is None:
             raise ValueError('No active session')
         if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= 1000000:
@@ -232,6 +233,8 @@ class SessionController:
             raise ValueError('Double salary must be a boolean')
         if three_doubles_to_jail is not None and not isinstance(three_doubles_to_jail, bool):
             raise ValueError('Three doubles rule must be a boolean')
+        if require_landing_to_buy is not None and not isinstance(require_landing_to_buy, bool):
+            raise ValueError('Landing requirement must be a boolean')
         immunity_settings = {
             'allow_rent_immunity': allow_rent_immunity,
             'immunity_follows_deed': immunity_follows_deed,
@@ -244,6 +247,7 @@ class SessionController:
             if value is not None:
                 setattr(self.session.rules, key, value)
         previous_three_doubles = self.session.rules.three_doubles_to_jail
+        previous_landing_requirement = self.session.rules.require_landing_to_buy
         previous_double = self.session.rules.double_salary_on_go
         previous = self.session.rules.salary_on_go
         updated = self.session.updated_at
@@ -252,6 +256,8 @@ class SessionController:
             self.session.rules.three_doubles_to_jail = three_doubles_to_jail
         if double_on_go is not None:
             self.session.rules.double_salary_on_go = double_on_go
+        if require_landing_to_buy is not None:
+            self.session.rules.require_landing_to_buy = require_landing_to_buy
         self.session.touch()
         try:
             self.save()
@@ -261,6 +267,7 @@ class SessionController:
             self.session.rules.salary_on_go = previous
             self.session.rules.three_doubles_to_jail = previous_three_doubles
             self.session.rules.double_salary_on_go = previous_double
+            self.session.rules.require_landing_to_buy = previous_landing_requirement
             self.session.updated_at = updated
             raise
         self._notify(GameEvent('settings_changed', {'salary_on_go': amount}))

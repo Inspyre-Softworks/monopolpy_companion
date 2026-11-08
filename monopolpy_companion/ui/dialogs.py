@@ -288,6 +288,12 @@ class GameSettingsDialog(QDialog):
         self.immunity_follows_deed = QCheckBox('Property-specific immunity follows traded deeds')
         self.immunity_follows_deed.setChecked(controller.session.rules.immunity_follows_deed)
         layout.addRow(self.immunity_follows_deed)
+        self.require_landing_to_buy = QCheckBox('Require players to land on properties before buying')
+        self.require_landing_to_buy.setChecked(controller.session.rules.require_landing_to_buy)
+        self.require_landing_to_buy.setToolTip(
+            'Direct purchases require the buyer to be on the space. Applies to properties, railroads and utilities.'
+        )
+        layout.addRow(self.require_landing_to_buy)
         note = QLabel('Applies to this game and is saved with it. Moves that explicitly skip GO salary, '
                       'such as being sent to Jail, do not earn a payment.')
         note.setWordWrap(True)
@@ -303,7 +309,8 @@ class GameSettingsDialog(QDialog):
             self.controller.set_go_salary(self.salary.value(), double_on_go=self.double_salary.isChecked(),
                                           three_doubles_to_jail=self.three_doubles.isChecked(),
                                           allow_rent_immunity=self.rent_immunity.isChecked(),
-                                          immunity_follows_deed=self.immunity_follows_deed.isChecked())
+                                          immunity_follows_deed=self.immunity_follows_deed.isChecked(),
+                                          require_landing_to_buy=self.require_landing_to_buy.isChecked())
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, 'Cannot save game settings', str(exc))
             return

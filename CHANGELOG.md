@@ -7,7 +7,15 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Add a saved game rule that requires buyers to be on a property's space for direct purchases.
+- Filter Board properties by ownership relative to the current turn, with deed controls and the ownership tracker beside the table on wide windows.
+
+### Changed
+- Preview the cash return and confirm before liquidating a property's building group from the Board tab.
+
 ### Fixed
+- Keep Board property names readable in both themes and put larger deed controls beside a bounded board table.
 - Enable whole-group building liquidation when house shortages prevent hotel downgrades.
 - Keep non-dice utility rent unresolved until the actual dice total is supplied.
 - Reject comma-containing account names so registered identities are preserved in player setup.
