@@ -65,7 +65,7 @@ def stylesheet(dark: bool = True) -> str:
         border: 1px solid {t['line']};
         padding: 5px 8px;
     }}
-    QDialog#tradeDialog, QDialog#playerAccountDialog, QDialog#devToolsDialog {{ background-color: {t['app']}; }}
+    QDialog {{ background-color: {t['app']}; }}
     QFrame#surface {{
         background-color: {t['surface']};
         border: 1px solid {t['line']};

@@ -57,6 +57,15 @@ class OutstandingPaymentTests(unittest.TestCase):
         self.assertEqual(record.amount, 12)
         self.assertTrue(engine.can_advance_turn())
 
+    def test_non_dice_utility_movement_waits_for_supplied_dice_total(self):
+        self.engine.purchase(self.owner.player_id, 12)
+        self.player.position = 9
+        self.engine.move(self.player.player_id, 3)
+        payment = self.engine.outstanding_payments(self.player.player_id)[0]
+        self.assertIsNone(payment['amount'])
+        record = self.engine.collect_rent(self.player.player_id, 12, dice_total=7)
+        self.assertEqual(record.amount, 28)
+
     def test_unowned_own_and_mortgaged_deeds_do_not_block_turn(self):
         for owner, mortgaged in [(None, False), (self.player.player_id, False),
                                   (self.owner.player_id, True)]:

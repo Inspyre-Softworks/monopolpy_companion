@@ -417,6 +417,12 @@ class GameEngine:
             Rent, taxes, purchases and card draws are separate actions so
             clients can show a decision to the human players.
         """
+        return self._move(player_id, spaces, collect_go=collect_go)
+
+    def _move(
+        self, player_id: str, spaces: int, *, collect_go: bool = True,
+        dice_total: Optional[int] = None,
+    ) -> MoveResult:
         player = self.session.get_player(player_id)
         if player.bankrupt or player.in_jail:
             raise ValueError('Player cannot move while bankrupt or in jail')
@@ -443,7 +449,7 @@ class GameEngine:
             self.send_to_jail(player_id)
         if old + spaces >= board_size:
             self._tick_immunity(player_id, 'laps')
-        self._record_landing_payment(player_id, landing, spaces)
+        self._record_landing_payment(player_id, landing, dice_total)
         if player is self.session.current_player:
             self.session.purchase_offer = (
                 destination if spaces and landing.ownable and self.session.owner_for(destination) is None
@@ -479,7 +485,8 @@ class GameEngine:
             self.send_to_jail(player_id)
             result = MoveResult(player_id, False, self._space(10), 10)
         else:
-            result = self.move(player_id, first_die + second_die)
+            result = self._move(player_id, first_die + second_die,
+                                dice_total=first_die + second_die)
         if pending is not None and (
             pending.get('die_one'), pending.get('die_two')
         ) == (first_die, second_die):
@@ -564,7 +571,9 @@ class GameEngine:
                 return True
         return False
 
-    def _record_landing_payment(self, player_id: str, space: Space, spaces: int) -> None:
+    def _record_landing_payment(
+        self, player_id: str, space: Space, dice_total: Optional[int]
+    ) -> None:
         amount = None
         recipient = None
         multiplier = None
@@ -584,8 +593,8 @@ class GameEngine:
             recipient = owner.player_id
             if space.space_type is SpaceType.UTILITY:
                 multiplier = self.rent_due(space.index, dice_total=2) // 2
-                if 2 <= spaces <= 12:
-                    amount = spaces * multiplier
+                if dice_total is not None:
+                    amount = dice_total * multiplier
             else:
                 amount = self.rent_due(space.index)
             if amount == 0:
@@ -610,8 +619,16 @@ class GameEngine:
         payment['amount'] = amount
         payment['settled'] = True
         self.session.touch()
+        self._finalize_winner_if_ready()
         self._emit('payment_settled', player_id=payment['player_id'], amount=amount)
         return record
+
+    def _finalize_winner_if_ready(self) -> None:
+        remaining = [player for player in self.session.players if not player.bankrupt]
+        if (len(remaining) == 1
+                and not self.outstanding_payments(remaining[0].player_id)):
+            self.session.winner_id = remaining[0].player_id
+            self.session.current_turn_index = self.session.players.index(remaining[0])
 
     @staticmethod
     def _payment_amount(payment: dict, dice_total: Optional[int]) -> int:
@@ -724,25 +741,25 @@ class GameEngine:
         self.session.turn_roll_indices.clear()
         self.session.turn_ended = True
         remaining = [candidate for candidate in self.session.players if not candidate.bankrupt]
+        if creditor is not None:
+            for index, amount in quote['interest']:
+                if creditor.cash >= amount:
+                    self.transfer(amount, from_player_id=creditor_id, kind='mortgage_interest',
+                                  space_index=index, description='Bankruptcy mortgage interest')
+                else:
+                    self.session.landing_payments.append({
+                        'player_id': creditor_id, 'space_index': index,
+                        'kind': 'mortgage_interest', 'amount': amount,
+                        'recipient_id': None, 'settled': False,
+                    })
         if len(remaining) == 1:
-            self.session.winner_id = remaining[0].player_id
             self.session.current_turn_index = self.session.players.index(remaining[0])
+            self._finalize_winner_if_ready()
         elif creditor is None and indices:
             first, *rest = sorted(indices)
             self.session.bankruptcy_auctions = rest
             self._open_auction(first)
         else:
-            if creditor is not None:
-                for index, amount in quote['interest']:
-                    if creditor.cash >= amount:
-                        self.transfer(amount, from_player_id=creditor_id, kind='mortgage_interest',
-                                      space_index=index, description='Bankruptcy mortgage interest')
-                    else:
-                        self.session.landing_payments.append({
-                            'player_id': creditor_id, 'space_index': index,
-                            'kind': 'mortgage_interest', 'amount': amount,
-                            'recipient_id': None, 'settled': False,
-                        })
             self.advance_turn()
         self.session.touch()
         self._emit('bankruptcy_declared', player_id=player_id, creditor_id=creditor_id,
@@ -791,7 +808,7 @@ class GameEngine:
         movement = None
         if doubles:
             self.release_from_jail(player_id, method='doubles')
-            movement = self.move(player_id, first + second)
+            movement = self._move(player_id, first + second, dice_total=first + second)
             roll['used_for_move'] = True
             self.session.turn_ended = True
         self.session.touch()
@@ -812,7 +829,7 @@ class GameEngine:
                 roll = candidate
         self.release_from_jail(player_id, method='fine')
         if roll is not None:
-            movement = self.move(player_id, roll['total'])
+            movement = self._move(player_id, roll['total'], dice_total=roll['total'])
             roll['used_for_move'] = True
             self.session.turn_ended = True
             return movement
@@ -1062,6 +1079,28 @@ class GameEngine:
         self._emit('building_sold', player_id=player_id,
                    space_index=space_index, level=level - 1)
         return state
+
+    def liquidate_building_group(self, player_id: str, space_index: int) -> int:
+        """Sell every building in a color group without requiring replacement houses."""
+        space, _ = self._owned(player_id, space_index)
+        group = self._color_group(space)
+        if not all(item.owner_id == player_id and not item.mortgaged for item in group):
+            raise ValueError('A complete unmortgaged color group is required')
+        if not any(self._level(item) for item in group):
+            raise ValueError('No buildings to sell')
+        proceeds = 0
+        for item in group:
+            deed = self._space(item.space_index)
+            amount = self._level(item) * (deed.house_cost // 2)
+            if not amount:
+                continue
+            item.houses = 0
+            item.hotel = False
+            self.transfer(amount, to_player_id=player_id,
+                          description=f'Building sale: {deed.name}', kind='building_sale',
+                          space_index=item.space_index)
+            proceeds += amount
+        return proceeds
 
     def send_to_jail(self, player_id: str) -> Player:
         """Send a nonbankrupt player to Jail without a GO salary award."""

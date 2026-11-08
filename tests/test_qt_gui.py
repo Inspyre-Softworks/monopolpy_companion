@@ -81,6 +81,11 @@ class QtGuiTests(unittest.TestCase):
         self.assertEqual(setup.result(), 1)
         self.assertTrue(setup.selected_accounts['taylor']['data']['pin_hash'])
 
+    def test_dark_theme_styles_all_dialogs(self):
+        from monopolpy_companion.ui.theme import stylesheet
+        self.assertIn('QDialog { background-color: #101b18; }', stylesheet(True))
+        self.assertIn('QDialog { background-color: #e9ede6; }', stylesheet(False))
+
     def test_session_render_and_action_refresh(self):
         session = self.controller.new_session('Qt Test', ['Avery', 'Blake'])
         self.assertEqual(self.window.player_table.rowCount(), 2)

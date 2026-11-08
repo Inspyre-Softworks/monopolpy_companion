@@ -53,6 +53,10 @@ class NewSessionDialog(QDialog):
         entry = self.account_picker.currentData()
         if entry is None:
             return
+        if ',' in entry['username']:
+            QMessageBox.warning(self, 'Cannot add account',
+                                'Account names cannot contain commas.')
+            return
         try:
             try:
                 account = self.accounts.unlock(entry)
@@ -213,7 +217,7 @@ class NewAccountDialog(QDialog):
     def _check(self):
         available = self.store.available(self.username.text())
         self.availability.setText('Username available' if available else
-                                  'Username is empty or already exists')
+                                  'Username is empty, contains a comma, or already exists')
         self.buttons.button(QDialogButtonBox.StandardButton.Save).setEnabled(available)
 
     def _save(self):

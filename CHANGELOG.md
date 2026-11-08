@@ -7,6 +7,13 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Enable whole-group building liquidation when house shortages prevent hotel downgrades.
+- Keep non-dice utility rent unresolved until the actual dice total is supplied.
+- Reject comma-containing account names so registered identities are preserved in player setup.
+- Settle inherited mortgage interest before declaring a winner and keep unpaid fees actionable.
+- Apply dark backgrounds to every dialog.
+
 ### Changed
 - Center the game name in the window caption and give the desktop dashboard a focused turn view with separate Board, Players, and Ledger tabs.
 

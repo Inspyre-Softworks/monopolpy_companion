@@ -25,8 +25,9 @@ class AccountStore:
                        for p in self.directory.glob('*.json')], key=lambda a: a['username'].casefold())
 
     def available(self, username):
-        return bool(username.strip()) and not any(
-            a['username'].casefold() == username.strip().casefold() for a in self.entries())
+        username = username.strip()
+        return bool(username) and ',' not in username and not any(
+            a['username'].casefold() == username.casefold() for a in self.entries())
 
     @staticmethod
     def _key(password, salt):
@@ -35,7 +36,7 @@ class AccountStore:
     def create(self, username, password='', pin=''):
         username = username.strip()
         if not self.available(username):
-            raise ValueError('Choose a unique, nonempty username')
+            raise ValueError('Choose a unique, nonempty username without commas')
         player = Player(name=username)
         if pin:
             PlayerAccount(player).set_pin(pin)

@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf-8") as handle:
 
 setup(
     name="monopolpy_companion",
-    version="1.0.dev35",
+    version="1.0.dev36",
     description="Electronic banker and GUI for physical Monopoly games",
     author="Taylor-Jayde Blackstone",
     author_email="t.blackstone@inspyre.tech",

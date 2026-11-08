@@ -48,3 +48,9 @@ class LocalAccountTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.store.create('Taylor', pin='abc')
         self.assertEqual(self.store.entries(), [])
+
+    def test_comma_in_username_is_rejected(self):
+        self.assertFalse(self.store.available('Taylor, Jr'))
+        with self.assertRaisesRegex(ValueError, 'without commas'):
+            self.store.create('Taylor, Jr')
+        self.assertEqual(self.store.entries(), [])

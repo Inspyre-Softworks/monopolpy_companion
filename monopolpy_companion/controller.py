@@ -46,7 +46,8 @@ class SessionController:
     ACTIONS = frozenset({
         'transfer', 'purchase', 'move', 'move_by_dice', 'advance_turn',
         'collect_rent', 'mortgage', 'unmortgage', 'buy_building',
-        'sell_building', 'send_to_jail', 'release_from_jail', 'pay_tax',
+        'sell_building', 'liquidate_building_group', 'send_to_jail',
+        'release_from_jail', 'pay_tax',
         'mortgage_many', 'unmortgage_many', 'simulate_dice',
         'roll_for_doubles', 'pay_jail_bail', 'pay_outstanding', 'trade',
         'start_auction', 'bid_at_auction', 'pass_at_auction', 'declare_bankruptcy',

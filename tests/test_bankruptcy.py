@@ -73,6 +73,33 @@ class BankruptcyTests(unittest.TestCase):
         self.assertFalse(self.a.bankrupt)
         self.assertIs(self.session.owner_for(39), self.a)
 
+    def test_group_liquidation_works_when_hotel_downgrades_exceed_house_supply(self):
+        for index in (1, 3):
+            self.engine.purchase(self.a.player_id, index)
+            self.session.get_property_state(index).hotel = True
+        self.a.cash = 0
+        houses_to_place = 29
+        for index in self.session.property_states:
+            if index in (1, 3):
+                continue
+            state = self.session.get_property_state(index)
+            state.houses = min(4, houses_to_place)
+            houses_to_place -= state.houses
+            if not houses_to_place:
+                break
+        self.a.position = 1
+        self.engine.move_by_dice(self.a.player_id, 1, 2)
+        with self.assertRaisesRegex(ValueError, 'Not enough houses'):
+            self.engine.sell_building(self.a.player_id, 1)
+        with self.assertRaisesRegex(ValueError, 'cover the'):
+            self.engine.bankruptcy_quote(self.a.player_id)
+        proceeds = self.controller.perform('liquidate_building_group', self.a.player_id, 1)
+        self.assertEqual(proceeds, 250)
+        self.assertFalse(self.session.get_property_state(1).hotel)
+        self.assertFalse(self.session.get_property_state(3).hotel)
+        self.engine.pay_outstanding(self.a.player_id)
+        self.assertEqual(self.a.cash, 50)
+
     def test_final_bankruptcy_on_required_bail_declares_winner(self):
         self.c.bankrupt = True
         self.a.in_jail = True
@@ -83,3 +110,22 @@ class BankruptcyTests(unittest.TestCase):
         self.assertFalse(self.engine.can_advance_turn())
         with self.assertRaisesRegex(ValueError, 'ended'):
             self.controller.perform('simulate_dice', self.b.player_id)
+
+    def test_final_bankruptcy_queues_inherited_mortgage_interest_before_winner(self):
+        self.engine.purchase(self.b.player_id, 3)
+        self.engine.purchase(self.a.player_id, 1)
+        self.engine.mortgage(self.a.player_id, 1)
+        self.a.cash = 0
+        self.b.cash = 0
+        self.c.bankrupt = True
+        self.a.position = 0
+        self.engine.move_by_dice(self.a.player_id, 1, 2)
+        self.controller.perform('declare_bankruptcy', self.a.player_id)
+        self.assertIsNone(self.session.winner_id)
+        self.assertEqual(self.session.current_player.player_id, self.b.player_id)
+        self.assertEqual(self.engine.outstanding_payments(self.b.player_id)[0]['kind'],
+                         'mortgage_interest')
+        self.assertFalse(self.engine.can_advance_turn())
+        self.controller.perform('mortgage', self.b.player_id, 3)
+        self.controller.perform('pay_outstanding', self.b.player_id)
+        self.assertEqual(self.session.winner_id, self.b.player_id)

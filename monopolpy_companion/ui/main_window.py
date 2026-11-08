@@ -653,8 +653,12 @@ class MainWindow(QMainWindow):
             lambda: self._board_action('sell_building'), buttons, 2, 1,
         )
         self._button(
+            'Liquidate group', 'Sell all buildings in a color group without needing replacement houses.',
+            lambda: self._board_action('liquidate_building_group'), buttons, 3, 0,
+        )
+        self._button(
             'Pay tax', 'Pay the printed tax on Income Tax or Luxury Tax.',
-            lambda: self._board_action('pay_tax'), buttons, 3, 0,
+            lambda: self._board_action('pay_tax'), buttons, 3, 1,
         )
         layout.addLayout(buttons)
         return group
