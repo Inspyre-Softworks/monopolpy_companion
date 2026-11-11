@@ -1,4 +1,4 @@
-sphinx>=8.1,<9
+sphinx==9.2.0
 furo
 myst-parser>=4,<5
 sphinx-design
