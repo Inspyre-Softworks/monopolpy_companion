@@ -145,13 +145,18 @@ class SessionController:
                 saved = self.repository.load(info.path)
                 if saved.session_id in seen:
                     continue
-                if player.account_id:
-                    matches = (candidate for candidate in saved.players
-                               if candidate.account_id == player.account_id)
-                else:
-                    matches = (candidate for candidate in saved.players if not candidate.account_id
-                               and candidate.name.casefold() == player.name.casefold())
-                match = next(matches, None)
+                match = next((candidate for candidate in saved.players
+                              if player.account_id and candidate.account_id == player.account_id), None)
+                if match is None:
+                    # Older games may have been saved before the player linked an account.
+                    name_matches = [
+                        candidate for candidate in saved.players
+                        if candidate.name.casefold() == player.name.casefold()
+                    ]
+                    if len(name_matches) == 1:
+                        candidate = name_matches[0]
+                        if not player.account_id or not candidate.account_id:
+                            match = candidate
                 if match is not None:
                     report = StatisticsService(saved).for_player(match.player_id)
                     history.append((saved.name, saved.created_at, report))

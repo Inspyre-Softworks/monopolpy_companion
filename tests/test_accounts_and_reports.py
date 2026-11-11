@@ -64,6 +64,23 @@ class PlayerAccountsTests(unittest.TestCase):
         self.assertEqual(overall.gameplay.games_played, 2)
         self.assertEqual(overall.gameplay.bankruptcies, 1)
 
+    def test_history_combines_linked_and_unlinked_saves_with_the_same_name(self):
+        account = {'id': 'account-avery', 'data': {'pin_salt': '', 'pin_hash': ''}}
+        other_account = {**account, 'id': 'another-avery'}
+        self.controller.new_session('Other account', ['Avery', 'Blake'],
+                                    accounts={'avery': other_account})
+        linked = self.controller.new_session('Linked', ['AVERY', 'Blake'],
+                                             accounts={'avery': account})
+
+        current, history = self.controller.player_history(linked.players[0].player_id)
+        self.assertEqual([entry[0] for entry in history], ['Accounts'])
+        overall = StatisticsService.overall(current, [entry[2] for entry in history])
+        self.assertEqual(overall.gameplay.games_played, 2)
+
+        self.controller.set_session(self.session)
+        _, history = self.controller.player_history(self.avery.player_id)
+        self.assertIn('Linked', [entry[0] for entry in history])
+
     def test_pin_is_hashed_and_authorization_is_required(self) -> None:
         self.controller.set_player_pin(self.avery.player_id, '1234')
         account = PlayerAccount(self.avery)

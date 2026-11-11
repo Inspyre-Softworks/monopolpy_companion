@@ -15,6 +15,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Preview the cash return and confirm before liquidating a property's building group from the Board tab.
 
 ### Fixed
+- Include older saves without linked accounts in cross-game player statistics when player names match.
 - Keep Board property names readable in both themes and put larger deed controls beside a bounded board table.
 - Enable whole-group building liquidation when house shortages prevent hotel downgrades.
 - Keep non-dice utility rent unresolved until the actual dice total is supplied.
